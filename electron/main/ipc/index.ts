@@ -1,0 +1,46 @@
+import { registerSystemIpc } from "./system";
+import { registerPlayerIpc } from "./player";
+import { registerConfigIpc } from "./config";
+import { registerLibraryIpc } from "./library";
+import { registerNowPlayingIpc } from "./nowPlaying";
+import { registerWindowIpc } from "./window";
+import { registerPluginIpc } from "./plugin";
+import { registerApisIpc } from "./apis";
+import { registerLyricsIpc } from "./lyrics";
+import { registerHotkeyIpc } from "./hotkey";
+import { registerThemeIpc } from "./theme";
+import { registerStreamingIpc } from "./streaming";
+import { registerLastfmIpc } from "./lastfm";
+import { registerCacheIpc } from "./cache";
+import { registerDownloadIpc } from "./download";
+import { registerExternalApiIpc } from "./externalApi";
+import { registerStatsIpc } from "./stats";
+import { registerUpdateIpc } from "./update";
+import { registerCloudIpc } from "./cloud";
+import { registerListenTogetherIpc } from "./listenTogether";
+import { registerMigrationIpc } from "./migration";
+
+/** 注册所有 IPC 处理 */
+export const registerIpcHandlers = (): void => {
+  registerSystemIpc();
+  registerPlayerIpc();
+  registerConfigIpc();
+  registerLibraryIpc();
+  registerNowPlayingIpc();
+  registerWindowIpc();
+  registerPluginIpc();
+  registerApisIpc();
+  registerCloudIpc();
+  registerLyricsIpc();
+  registerHotkeyIpc();
+  registerThemeIpc();
+  registerStreamingIpc();
+  registerLastfmIpc();
+  registerCacheIpc();
+  registerDownloadIpc();
+  registerExternalApiIpc();
+  registerStatsIpc();
+  registerUpdateIpc();
+  registerListenTogetherIpc();
+  registerMigrationIpc();
+};

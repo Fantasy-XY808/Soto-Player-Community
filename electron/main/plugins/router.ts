@@ -1,0 +1,80 @@
+/**
+ * 插件动作路由
+ *
+ * 把渲染端 / 主进程内部的 action 请求转发给对应插件的 sandbox，并处理超时、取消。
+ * 当前只有 musicUrl 一个动作——新增动作时，在 `shared/types/plugin.ts` 的 `PluginAction`
+ * / `ActionIO` 里登记，然后在这里补一个公共入口函数即可（callOn / supportsAction 都是泛型）。
+ */
+
+import type {
+  MusicUrlReq,
+  MusicUrlRes,
+  PluginAction,
+  PluginResolveUrlArgs,
+} from "@shared/types/plugin";
+import { ACTION_TIMEOUTS, PluginErrorCodes } from "@shared/defaults/plugin-api";
+import { pluginRegistry, type PluginRuntime } from "./registry";
+import { pluginLog } from "@main/utils/logger";
+
+let reqSeq = 0;
+const nextRequestId = (): string => `r${Date.now().toString(36)}-${++reqSeq}`;
+
+/** 在某个插件上调用一个动作，返回结果 */
+const callOn = <T>(
+  rt: PluginRuntime,
+  action: PluginAction,
+  params: unknown,
+  timeoutMs: number,
+): Promise<T> => {
+  if (!rt.sandbox?.isAlive()) {
+    return Promise.reject(
+      Object.assign(new Error(`plugin ${rt.manifest.id} not ready`), {
+        code: PluginErrorCodes.NOT_READY,
+      }),
+    );
+  }
+  const requestId = nextRequestId();
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      rt.pending.delete(requestId);
+      rt.sandbox?.sendCancel(requestId);
+      reject(
+        Object.assign(new Error(`plugin ${rt.manifest.id} request timeout`), {
+          code: PluginErrorCodes.REQUEST_TIMEOUT,
+        }),
+      );
+    }, timeoutMs);
+    rt.pending.set(requestId, {
+      resolve: (v) => resolve(v as T),
+      reject,
+      timer,
+    });
+    rt.sandbox!.sendCall(requestId, action, params);
+  });
+};
+
+export const resolveUrl = async (args: PluginResolveUrlArgs): Promise<MusicUrlRes> => {
+  const rt = pluginRegistry.getRuntime(args.pluginId);
+  if (!rt) {
+    throw Object.assign(new Error(`plugin ${args.pluginId} not found`), {
+      code: PluginErrorCodes.NOT_FOUND,
+    });
+  }
+  if (rt.status.state !== "ready") {
+    throw Object.assign(new Error(`plugin ${args.pluginId} not ready`), {
+      code: PluginErrorCodes.NOT_READY,
+    });
+  }
+  // 不卡 inited 声明，调到 sandbox 让脚本自己判 source；handler 没注册时 sandbox 端回 ACTION_UNREGISTERED
+  const params: MusicUrlReq = {
+    source: args.source ?? "",
+    quality: args.quality ?? "hq",
+    musicInfo: args.musicInfo,
+  };
+  try {
+    return await callOn<MusicUrlRes>(rt, "musicUrl", params, ACTION_TIMEOUTS.musicUrl);
+  } catch (err) {
+    pluginLog.warn("resolveUrl rejected", args.pluginId, (err as Error)?.message);
+    throw err;
+  }
+};

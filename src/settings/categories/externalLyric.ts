@@ -1,0 +1,508 @@
+import type { SettingCategory, SettingSection } from "@/types/settings-schema";
+import { useSettingsStore } from "@/stores/settings";
+import { isMac } from "@/utils/config";
+import IconLucideMonitor from "~icons/lucide/monitor";
+
+const desktopLyricSection: SettingSection = {
+  id: "desktopLyric",
+  tag: { text: "Beta" },
+  items: [
+    {
+      key: "desktopLyricEnabled",
+      type: "switch",
+      binding: { store: "settings", path: "isDesktopLyricOpen" },
+      defaultValue: false,
+    },
+    {
+      key: "desktopLyricFontSize",
+      type: "select",
+      binding: { store: "settings", path: "system.desktopLyric.fontSize" },
+      defaultValue: 24,
+      options: Array.from({ length: 96 - 20 + 1 }, (_, i) => {
+        const n = 20 + i;
+        return { value: n, label: `${n} px` };
+      }),
+    },
+    {
+      key: "desktopLyricFontWeight",
+      type: "slider",
+      binding: { store: "settings", path: "system.desktopLyric.fontWeight" },
+      min: 100,
+      max: 900,
+      step: 100,
+      defaultValue: 600,
+      marks: { 100: "100", 400: "400", 700: "700", 900: "900" },
+    },
+    {
+      key: "desktopLyricDoubleLine",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.doubleLine" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricAlign",
+      type: "select",
+      binding: { store: "settings", path: "system.desktopLyric.align" },
+      options: [
+        { value: "left", labelKey: "settings.desktopLyricAlign.left" },
+        { value: "center", labelKey: "settings.desktopLyricAlign.center" },
+        { value: "right", labelKey: "settings.desktopLyricAlign.right" },
+        { value: "justify", labelKey: "settings.desktopLyricAlign.justify" },
+      ],
+      defaultValue: "center",
+    },
+    {
+      key: "desktopLyricWordByWord",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.wordByWord" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricAutoGenerateWordByWord",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.autoGenerateWordByWord" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricShowTranslation",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.showTranslation" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricPlayedColor",
+      type: "color",
+      binding: { store: "settings", path: "system.desktopLyric.playedColor" },
+      defaultValue: "#ffffff",
+      showAlpha: false,
+    },
+    {
+      key: "desktopLyricUnplayedColor",
+      type: "color",
+      binding: { store: "settings", path: "system.desktopLyric.unplayedColor" },
+      defaultValue: "#7d7d7d",
+      showAlpha: false,
+    },
+    {
+      key: "desktopLyricStrokeColor",
+      type: "color",
+      binding: { store: "settings", path: "system.desktopLyric.strokeColor" },
+      defaultValue: "rgba(0, 0, 0, 0.5)",
+    },
+    {
+      key: "desktopLyricBackgroundMask",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.backgroundMask" },
+      defaultValue: false,
+      children: [
+        {
+          key: "desktopLyricBackgroundMaskColor",
+          type: "color",
+          binding: { store: "settings", path: "system.desktopLyric.backgroundMaskColor" },
+          defaultValue: "rgba(0, 0, 0, 0.3)",
+        },
+      ],
+    },
+    {
+      key: "desktopLyricAlwaysShowSongInfo",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.alwaysShowSongInfo" },
+      defaultValue: false,
+    },
+    {
+      key: "desktopLyricAnimation",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.animation" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricLimitBounds",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.limitBounds" },
+      defaultValue: false,
+    },
+    {
+      key: "desktopLyricAlwaysOnTop",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.alwaysOnTop" },
+      defaultValue: true,
+    },
+    {
+      key: "desktopLyricLocked",
+      type: "switch",
+      binding: { store: "settings", path: "system.desktopLyric.locked" },
+      defaultValue: false,
+    },
+  ],
+};
+
+const dynamicIslandSection: SettingSection = {
+  id: "dynamicIsland",
+  tag: { text: "Beta" },
+  items: [
+    {
+      key: "dynamicIslandEnabled",
+      type: "switch",
+      binding: { store: "settings", path: "isDynamicIslandOpen" },
+      defaultValue: false,
+    },
+    {
+      key: "dynamicIslandScale",
+      type: "slider",
+      binding: { store: "settings", path: "system.dynamicIsland.scale" },
+      min: 0.5,
+      max: 2,
+      step: 0.05,
+      defaultValue: 1,
+      marks: { 0.5: "50%", 1: "100%", 2: "200%" },
+    },
+    {
+      key: "dynamicIslandFontWeight",
+      type: "slider",
+      binding: { store: "settings", path: "system.dynamicIsland.fontWeight" },
+      min: 100,
+      max: 900,
+      step: 100,
+      defaultValue: 500,
+      marks: { 100: "100", 500: "500", 900: "900" },
+    },
+    {
+      key: "dynamicIslandWordByWord",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.wordByWord" },
+      defaultValue: true,
+    },
+    {
+      key: "dynamicIslandDoubleLine",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.doubleLine" },
+      defaultValue: false,
+    },
+    {
+      key: "dynamicIslandShowTranslation",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.showTranslation" },
+      defaultValue: false,
+    },
+    {
+      key: "dynamicIslandPlayedColor",
+      type: "color",
+      binding: { store: "settings", path: "system.dynamicIsland.playedColor" },
+      defaultValue: "rgba(255, 255, 255, 1)",
+      showAlpha: false,
+    },
+    {
+      key: "dynamicIslandUnplayedColor",
+      type: "color",
+      binding: { store: "settings", path: "system.dynamicIsland.unplayedColor" },
+      defaultValue: "rgba(255, 255, 255, 0.5)",
+    },
+    {
+      key: "dynamicIslandBackgroundColor",
+      type: "color",
+      binding: { store: "settings", path: "system.dynamicIsland.backgroundColor" },
+      defaultValue: "rgba(0, 0, 0, 1)",
+    },
+    {
+      key: "dynamicIslandAlwaysOnTop",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.alwaysOnTop" },
+      defaultValue: true,
+    },
+    ...(isMac
+      ? [
+          {
+            key: "dynamicIslandNotchFusion",
+            type: "switch" as const,
+            binding: { store: "settings" as const, path: "system.dynamicIsland.notchFusion" },
+            defaultValue: false,
+          },
+        ]
+      : []),
+    {
+      key: "dynamicIslandSnapCentered",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.snapCentered" },
+      defaultValue: true,
+      disabled: () => useSettingsStore().system.dynamicIsland.notchFusion,
+      childrenCondition: () =>
+        !useSettingsStore().system.dynamicIsland.snapCentered &&
+        !useSettingsStore().system.dynamicIsland.notchFusion,
+      children: [
+        {
+          key: "dynamicIslandHorizontalOffset",
+          type: "slider",
+          binding: { store: "settings", path: "system.dynamicIsland.horizontalOffset" },
+          min: -500,
+          max: 500,
+          step: 10,
+          defaultValue: 0,
+          marks: { "-500": "-500", 0: "0", 500: "500" },
+        },
+      ],
+    },
+    {
+      key: "dynamicIslandNonOcclusive",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.nonOcclusive" },
+      defaultValue: false,
+    },
+    {
+      key: "dynamicIslandShowSpectrum",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.showSpectrum" },
+      defaultValue: true,
+      children: [
+        {
+          key: "dynamicIslandSpectrumStyle",
+          type: "select",
+          binding: { store: "settings", path: "system.dynamicIsland.spectrumStyle" },
+          options: [
+            { value: "gradient", labelKey: "settings.dynamicIslandSpectrumStyle.gradient" },
+            { value: "solid", labelKey: "settings.dynamicIslandSpectrumStyle.solid" },
+            { value: "minimal", labelKey: "settings.dynamicIslandSpectrumStyle.minimal" },
+          ],
+          defaultValue: "gradient",
+        },
+      ],
+    },
+    {
+      key: "dynamicIslandEnableExpandedView",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.enableExpandedView" },
+      defaultValue: true,
+      childrenCondition: () => useSettingsStore().system.dynamicIsland.enableExpandedView,
+      children: [
+        {
+          key: "dynamicIslandExpandedTimeout",
+          type: "slider",
+          binding: { store: "settings", path: "system.dynamicIsland.expandedTimeout" },
+          min: 3,
+          max: 30,
+          step: 1,
+          defaultValue: 8,
+          marks: { 3: "3s", 8: "8s", 15: "15s", 30: "30s" },
+        },
+      ],
+    },
+    {
+      key: "dynamicIslandBackgroundStyle",
+      type: "select",
+      binding: { store: "settings", path: "system.dynamicIsland.backgroundStyle" },
+      options: [
+        { value: "solid", labelKey: "settings.dynamicIslandBackgroundStyle.solid" },
+        { value: "glass", labelKey: "settings.dynamicIslandBackgroundStyle.glass" },
+        { value: "mica", labelKey: "settings.dynamicIslandBackgroundStyle.mica" },
+        { value: "dynamic", labelKey: "settings.dynamicIslandBackgroundStyle.dynamic" },
+      ],
+      defaultValue: "solid",
+    },
+    {
+      key: "dynamicIslandWidthMode",
+      type: "select",
+      binding: { store: "settings", path: "system.dynamicIsland.widthMode" },
+      options: [
+        { value: "adaptive", labelKey: "settings.dynamicIslandWidthMode.adaptive" },
+        { value: "fixed", labelKey: "settings.dynamicIslandWidthMode.fixed" },
+      ],
+      defaultValue: "adaptive",
+      childrenCondition: () => useSettingsStore().system.dynamicIsland.widthMode === "fixed",
+      children: [
+        {
+          key: "dynamicIslandFixedWidth",
+          type: "slider",
+          binding: { store: "settings", path: "system.dynamicIsland.fixedWidth" },
+          min: 280,
+          max: 600,
+          step: 10,
+          defaultValue: 360,
+          marks: { 280: "280", 360: "360", 480: "480", 600: "600" },
+        },
+      ],
+    },
+    {
+      key: "dynamicIslandMaxWidth",
+      type: "slider",
+      binding: { store: "settings", path: "system.dynamicIsland.maxWidth" },
+      min: 320,
+      max: 720,
+      step: 20,
+      defaultValue: 480,
+      marks: { 320: "320", 480: "480", 600: "600", 720: "720" },
+      childrenCondition: () => useSettingsStore().system.dynamicIsland.widthMode === "adaptive",
+    },
+    {
+      key: "dynamicIslandOverflowMode",
+      type: "select",
+      binding: { store: "settings", path: "system.dynamicIsland.overflowMode" },
+      options: [
+        { value: "truncate", labelKey: "settings.dynamicIslandOverflowMode.truncate" },
+        { value: "scroll", labelKey: "settings.dynamicIslandOverflowMode.scroll" },
+      ],
+      defaultValue: "truncate",
+    },
+    {
+      key: "dynamicIslandEnableCoverFlip",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.enableCoverFlip" },
+      defaultValue: true,
+    },
+  ],
+};
+
+/** Win 平台限定 */
+const taskbarLyricSection: SettingSection = {
+  id: "taskbarLyric",
+  tag: { text: "Beta" },
+  items: [
+    {
+      key: "taskbarLyricEnabled",
+      type: "switch",
+      binding: { store: "settings", path: "isTaskbarLyricOpen" },
+      defaultValue: false,
+    },
+    {
+      key: "taskbarLyricPosition",
+      type: "select",
+      binding: { store: "settings", path: "system.taskbarLyric.position" },
+      options: [
+        { value: "auto", labelKey: "settings.taskbarLyricPosition.auto" },
+        { value: "left", labelKey: "settings.taskbarLyricPosition.left" },
+        { value: "right", labelKey: "settings.taskbarLyricPosition.right" },
+      ],
+      defaultValue: "auto",
+    },
+    {
+      key: "taskbarLyricAutoMaxWidth",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.autoMaxWidth" },
+      defaultValue: true,
+      childrenCondition: () => useSettingsStore().system.taskbarLyric.autoMaxWidth === false,
+      children: [
+        {
+          key: "taskbarLyricMaxWidth",
+          type: "slider",
+          binding: { store: "settings", path: "system.taskbarLyric.maxWidth" },
+          min: 200,
+          max: 800,
+          step: 20,
+          defaultValue: 400,
+          marks: { 200: "200", 400: "400", 800: "800" },
+        },
+      ],
+    },
+    {
+      key: "taskbarLyricLeftMargin",
+      type: "number",
+      binding: { store: "settings", path: "system.taskbarLyric.leftMargin" },
+      min: 0,
+      max: 500,
+      defaultValue: 0,
+    },
+    {
+      key: "taskbarLyricRightMargin",
+      type: "number",
+      binding: { store: "settings", path: "system.taskbarLyric.rightMargin" },
+      min: 0,
+      max: 500,
+      defaultValue: 0,
+    },
+    {
+      key: "taskbarLyricColorMode",
+      type: "select",
+      binding: { store: "settings", path: "system.taskbarLyric.colorMode" },
+      options: [
+        { value: "taskbar", labelKey: "settings.taskbarLyricColorMode.taskbar" },
+        { value: "taskbarInverse", labelKey: "settings.taskbarLyricColorMode.taskbarInverse" },
+        { value: "light", labelKey: "settings.taskbarLyricColorMode.light" },
+        { value: "dark", labelKey: "settings.taskbarLyricColorMode.dark" },
+      ],
+      defaultValue: "taskbar",
+    },
+    {
+      key: "taskbarLyricFontSize",
+      type: "slider",
+      binding: { store: "settings", path: "system.taskbarLyric.fontSize" },
+      min: 12,
+      max: 20,
+      step: 1,
+      defaultValue: 14,
+      marks: { 12: "12", 14: "14", 17: "17", 20: "20" },
+    },
+    {
+      key: "taskbarLyricShowCover",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.showCover" },
+      defaultValue: true,
+    },
+    {
+      key: "taskbarLyricWordByWord",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.wordByWord" },
+      defaultValue: true,
+    },
+    {
+      key: "taskbarLyricDoubleLine",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.doubleLine" },
+      defaultValue: true,
+    },
+    {
+      key: "taskbarLyricShowTranslation",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.showTranslation" },
+      defaultValue: true,
+    },
+    {
+      key: "taskbarLyricShowSpectrum",
+      type: "switch",
+      binding: { store: "settings", path: "system.taskbarLyric.showSpectrum" },
+      defaultValue: true,
+      children: [
+        {
+          key: "taskbarLyricSpectrumSensitivity",
+          type: "slider",
+          binding: { store: "settings", path: "system.taskbarLyric.spectrumSensitivity" },
+          min: 0.5,
+          max: 3,
+          step: 0.1,
+          defaultValue: 1,
+          marks: { 0.5: "0.5", 1: "1", 2: "2", 3: "3" },
+        },
+        {
+          key: "taskbarLyricSpectrumSmoothing",
+          type: "slider",
+          binding: { store: "settings", path: "system.taskbarLyric.spectrumSmoothing" },
+          min: 0,
+          max: 0.9,
+          step: 0.05,
+          defaultValue: 0.5,
+          marks: { 0: "0", 0.5: "0.5", 0.9: "0.9" },
+        },
+        {
+          key: "taskbarLyricSpectrumHoverBarCount",
+          type: "slider",
+          binding: { store: "settings", path: "system.taskbarLyric.spectrumHoverBarCount" },
+          min: 0,
+          max: 24,
+          step: 1,
+          defaultValue: 7,
+          marks: { 0: "关", 7: "7", 12: "12", 24: "24" },
+        },
+      ],
+    },
+  ],
+};
+
+const externalLyricCategory: SettingCategory = {
+  id: "externalLyric",
+  icon: IconLucideMonitor,
+  sections: [
+    desktopLyricSection,
+    dynamicIslandSection,
+    // taskbarLyric 仅 Windows 可用
+    ...(navigator.platform.startsWith("Win") ? [taskbarLyricSection] : []),
+  ],
+};
+
+export default externalLyricCategory;

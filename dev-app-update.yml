@@ -1,0 +1,4 @@
+provider: github
+owner: SPlayer-Dev
+repo: SPlayer-Next
+updaterCacheDirName: splayer-next-updater

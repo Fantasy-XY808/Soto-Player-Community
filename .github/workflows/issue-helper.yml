@@ -1,0 +1,182 @@
+name: Issue Helper
+
+on:
+  issues:
+    types: [opened, labeled]
+
+# 权限配置
+permissions:
+  issues: write
+
+jobs:
+  issue-handler:
+    runs-on: ubuntu-latest
+    steps:
+      # 自动欢迎
+      - name: Welcome Comment
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const login = context.payload.issue.user.login;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `👋 您好 @${login}，感谢提交 Issue！`,
+                `🚀 我们已经收到您的反馈，会尽快确认您的问题。`,
+                ``,
+                `👋 Hi @${login}, thanks for opening this issue!`,
+                `🚀 We have received your report and will review it as soon as possible.`,
+              ].join('\n'),
+            });
+
+      # 自动关闭（wontfix / duplicate）
+      - name: Auto Close
+        if: github.event.action == 'labeled' && contains(fromJSON('["wontfix", "duplicate"]'), github.event.label.name)
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const labelName = context.payload.label.name;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `抱歉，由于该 Issue 被标记为 **${labelName}**，将自动关闭。`,
+                `如果您认为该 Issue 仍然有效，请补充信息后重新提交。`,
+                ``,
+                `Sorry, this issue has been marked as **${labelName}** and will be closed automatically.`,
+                `If you believe this issue is still valid, please provide more details and open a new issue.`,
+              ].join('\n'),
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed',
+              state_reason: 'not_planned',
+            });
+
+      # question 标签回复
+      - name: Auto Reply
+        if: github.event.action == 'labeled' && github.event.label.name == 'question'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const login = context.payload.issue.user.login;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `🤝 您好 @${login}，感谢您的反馈！`,
+                `由于缺少清晰的复现步骤，我们暂时无法稳定复现该问题。`,
+                `请补充详细复现步骤、日志和环境信息，我们会尽快跟进。`,
+                ``,
+                `🤝 Hi @${login}, thanks for your report!`,
+                `We currently cannot reproduce this issue due to missing or unclear reproduction steps.`,
+                `Please provide detailed reproduction steps, logs, and environment info, and we will follow up soon.`,
+              ].join('\n'),
+            });
+
+      # 已确认 bug（移除 question 标签并回复）
+      - name: Auto Confirm BUG
+        if: github.event.action == 'labeled' && github.event.label.name == 'bug'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const login = context.payload.issue.user.login;
+            for (const name of ['question']) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `🤝 您好 @${login}，感谢您的反馈！`,
+                `我们已经确认该问题，并计划在后续版本修复。`,
+                ``,
+                `🤝 Hi @${login}, thanks for your report!`,
+                `We have confirmed this bug and plan to fix it in a future release.`,
+              ].join('\n'),
+            });
+
+      # invalid（无法复现或信息不足）
+      - name: Auto Unreproducible
+        if: github.event.action == 'labeled' && github.event.label.name == 'invalid'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const login = context.payload.issue.user.login;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `🤝 您好 @${login}，感谢您的反馈！`,
+                `由于当前信息不足或无法复现，我们将该 Issue 标记为 invalid 并关闭。`,
+                `如果您可以提供稳定复现步骤，欢迎重新提交。`,
+                ``,
+                `🤝 Hi @${login}, thanks for your report!`,
+                `We are marking this issue as invalid and closing it because we cannot reproduce it with the current information.`,
+                `If you can provide reliable reproduction steps, feel free to open a new issue.`,
+              ].join('\n'),
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed',
+              state_reason: 'not_planned',
+            });
+
+      # resolved（已修复并自动关闭）
+      - name: Auto Resolved
+        if: github.event.action == 'labeled' && github.event.label.name == 'resolved'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const login = context.payload.issue.user.login;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `🎉 您好 @${login}，感谢您的反馈！`,
+                `该问题已修复，并将在当前开发版或下一个正式版中生效。`,
+                `若您仍能复现该问题，欢迎重新提交新的 Issue。`,
+                ``,
+                `🎉 Hi @${login}, thanks for your report!`,
+                `This issue has been resolved and will be available in the current dev build or next stable release.`,
+                `If you can still reproduce this problem, please open a new issue.`,
+              ].join('\n'),
+            });
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'bug',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed',
+              state_reason: 'completed',
+            });

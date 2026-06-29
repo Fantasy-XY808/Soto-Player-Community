@@ -1,0 +1,520 @@
+<script setup lang="ts">
+import type { LyricLine } from "@shared/types/lyrics";
+import type { TaskbarLyricSettings } from "@shared/types/settings";
+import DEFAULT_COVER from "@/assets/images/song.jpg";
+import IconSkipBack from "~icons/lucide/skip-back";
+import IconSkipForward from "~icons/lucide/skip-forward";
+import IconPlay from "~icons/lucide/play";
+import IconPause from "~icons/lucide/pause";
+import TaskbarLyricLine from "./components/TaskbarLyricLine.vue";
+import TaskbarSpectrum from "./components/TaskbarSpectrum.vue";
+import { pickPrimaryIndex } from "@shared/utils/lyricSync";
+import { useNowPlayingSync } from "@windows/shared/composables/useNowPlayingSync";
+import { useTaskbarSpectrum } from "@windows/shared/composables/useTaskbarSpectrum";
+import { isPureMusic } from "@shared/utils/pureMusicDetect";
+
+const config = reactive<TaskbarLyricSettings>({
+  position: "auto",
+  autoMaxWidth: true,
+  maxWidth: 400,
+  leftMargin: 0,
+  rightMargin: 0,
+  colorMode: "taskbar",
+  doubleLine: true,
+  showTranslation: true,
+  showCover: true,
+  wordByWord: true,
+  fontSize: 14,
+  fontFamily: "",
+  showSpectrum: true,
+  spectrumSensitivity: 1.0,
+  spectrumSmoothing: 0.3,
+  spectrumHoverBarCount: 7,
+});
+
+const anchor = ref<"left" | "right">("left");
+const taskbarIsLight = ref(false);
+const isHovered = ref(false);
+
+const { track, lyric, primaryIndex, playing } = useNowPlayingSync({
+  pickIndex: pickPrimaryIndex,
+  logTag: "taskbar-lyric",
+  fftEnabled: config.showSpectrum,
+});
+
+/** 频谱数据处理 */
+const { bars } = useTaskbarSpectrum({
+  sensitivity: () => config.spectrumSensitivity,
+  smoothing: () => config.spectrumSmoothing,
+});
+
+/** 是否为纯音乐 */
+const pureMusic = computed(() => isPureMusic(lyric.value));
+
+/** 是否显示频谱（无歌词可显示时替换歌词，涵盖暂无歌词与纯音乐两种情况） */
+const showSpectrum = computed(() => config.showSpectrum && (pureMusic.value || !hasLyric.value));
+
+const currentLine = computed<LyricLine | null>(() => {
+  const idx = primaryIndex.value;
+  if (idx < 0) return null;
+  return lyric.value[idx] ?? null;
+});
+
+const hasLyric = computed(() => lyric.value.length > 0 && primaryIndex.value >= 0);
+
+const titleText = computed<string>(() => track.value?.title ?? "SPlayer");
+const artistsText = computed<string>(
+  () => track.value?.artists?.map((a) => a.name).join(" / ") || "未知艺术家",
+);
+
+const effectiveTheme = computed<"light" | "dark">(() => {
+  if (config.colorMode === "light") return "light";
+  if (config.colorMode === "dark") return "dark";
+  if (config.colorMode === "taskbarInverse") return taskbarIsLight.value ? "dark" : "light";
+  return taskbarIsLight.value ? "light" : "dark";
+});
+
+interface RenderItem {
+  key: string;
+  role: "primary" | "secondary";
+  text: string;
+  line?: LyricLine;
+}
+
+const items = computed<RenderItem[]>(() => {
+  if (hasLyric.value) {
+    const idx = primaryIndex.value;
+    const line = currentLine.value!;
+    const list: RenderItem[] = [
+      {
+        key: `line-${idx}`,
+        role: "primary",
+        text: line.words.map((w) => w.word).join(""),
+        line,
+      },
+    ];
+    if (config.doubleLine) {
+      const trans = config.showTranslation ? line.translatedLyric : "";
+      if (trans) {
+        list.push({ key: `trans-${idx}`, role: "secondary", text: trans });
+      } else {
+        const next = lyric.value[idx + 1];
+        if (next) {
+          list.push({
+            key: `line-${idx + 1}`,
+            role: "secondary",
+            text: next.words.map((w) => w.word).join(""),
+            line: next,
+          });
+        }
+      }
+    }
+    return list;
+  }
+  /* 无歌词：歌曲信息填在主/副行 */
+  const list: RenderItem[] = [{ key: "meta-title", role: "primary", text: titleText.value }];
+  if (config.doubleLine) {
+    list.push({ key: "meta-artist", role: "secondary", text: artistsText.value });
+  }
+  return list;
+});
+
+const rootStyle = computed(() => ({
+  "--tbl-font-size": `${config.fontSize}px`,
+  fontFamily: config.fontFamily || undefined,
+}));
+
+const handlePrev = (): void => window.api.player.dispatch("prev");
+const handleNext = (): void => window.api.player.dispatch("next");
+const handleTogglePlay = (): void => window.api.player.dispatch(playing.value ? "pause" : "play");
+const handleFocusMain = (): void => {
+  window.api.system.focusMainWindow().catch(() => {});
+};
+/** 点击封面：打开主界面并展开到播放界面 */
+const handleCoverClick = (): void => {
+  window.api.system.openPlayingView().catch(() => {});
+};
+
+const unsubscribers: Array<() => void> = [];
+
+onMounted(() => {
+  // 先注册监听器，避免主进程在 ready-to-show 阶段下发的首次 layout 事件被丢弃
+  // 之前的实现把监听器放在 await config.get 之后，导致 anchor/taskbarIsLight 保持默认值，
+  // 浅色任务栏上白字不可见，每次需要去设置里关一下再开才生效
+  unsubscribers.push(
+    window.api.taskbarLyric.onLayout((data) => {
+      anchor.value = data.anchor;
+      taskbarIsLight.value = data.isLight;
+    }),
+    window.api.taskbarLyric.onConfigChange((next) => {
+      const prevShowSpectrum = config.showSpectrum;
+      Object.assign(config, next);
+      // 频谱开关变化时同步 FFT 订阅
+      if (config.showSpectrum !== prevShowSpectrum) {
+        window.api.player.setFftEnabled(config.showSpectrum).catch(() => {});
+      }
+    }),
+  );
+
+  // 异步加载持久化配置；监听器已就绪，迟到的 onConfigChange 也能合并到 config
+  void window.api.config
+    .get("taskbarLyric")
+    .then((saved) => {
+      if (saved) Object.assign(config, saved as TaskbarLyricSettings);
+    })
+    .catch((error) => {
+      console.error("[taskbar-lyric] load config failed", error);
+    });
+
+  // 订阅 FFT 推送：主进程维护引用计数，任一窗口订阅即保持推送
+  // 这样主窗口 BottomSpectrum 卸载后任务栏频谱仍能继续工作
+  if (config.showSpectrum) {
+    window.api.player.setFftEnabled(true).catch(() => {});
+  }
+});
+
+onBeforeUnmount(() => {
+  for (const off of unsubscribers) off();
+  // 取消 FFT 订阅（引用计数 -1）
+  if (config.showSpectrum) {
+    window.api.player.setFftEnabled(false).catch(() => {});
+  }
+});
+</script>
+
+<template>
+  <div class="wrapper" :data-align="anchor">
+    <div
+      class="container"
+      :class="{ 'is-hovered': isHovered }"
+      :data-theme="effectiveTheme"
+      :data-align="anchor"
+      :style="rootStyle"
+      @mouseenter="isHovered = true"
+      @mouseleave="isHovered = false"
+      @dblclick="handleFocusMain"
+    >
+      <div
+        v-if="config.showCover"
+        class="cover-wrapper"
+        @click.stop="handleCoverClick"
+        @dblclick.stop
+      >
+        <img
+          class="cover"
+          :src="track?.cover || DEFAULT_COVER"
+          alt=""
+          draggable="false"
+          @error="($event.target as HTMLImageElement).src = DEFAULT_COVER"
+        />
+      </div>
+
+      <!-- 播放控件 -->
+      <div class="controls-wrapper">
+        <div class="controls-inner">
+          <button class="control-btn" type="button" @click.stop="handlePrev" @dblclick.stop>
+            <IconSkipBack class="control-icon" />
+          </button>
+          <button class="control-btn" type="button" @click.stop="handleTogglePlay" @dblclick.stop>
+            <component :is="playing ? IconPause : IconPlay" class="control-icon-play" />
+          </button>
+          <button class="control-btn" type="button" @click.stop="handleNext" @dblclick.stop>
+            <IconSkipForward class="control-icon" />
+          </button>
+        </div>
+      </div>
+
+      <!-- 文本区 -->
+      <div class="lyric-area" :class="{ 'spectrum-mode': showSpectrum }">
+        <!-- 歌词层 -->
+        <div class="lyrics-layer">
+          <TransitionGroup tag="div" name="line" class="lyric-column">
+            <div v-for="item in items" :key="item.key" class="lyric-line" :data-role="item.role">
+              <TaskbarLyricLine
+                :line="item.line"
+                :text="item.text"
+                :word-by-word="config.wordByWord && !!item.line"
+                :anchor="anchor"
+              />
+            </div>
+          </TransitionGroup>
+        </div>
+        <!-- 歌曲信息 -->
+        <div class="song-info">
+          <div class="song-title">{{ titleText }}</div>
+          <div v-if="config.doubleLine" class="song-artist">
+            {{ artistsText }}
+          </div>
+        </div>
+        <!-- 频谱层 -->
+        <TaskbarSpectrum
+          :bars="bars"
+          :hovered="isHovered"
+          :hover-bar-count="config.spectrumHoverBarCount"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+.wrapper {
+  width: 100vw;
+  height: 100vh;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+.wrapper[data-align="right"] {
+  justify-content: flex-end;
+}
+.container {
+  /* 深色主题 */
+  --tbl-text-primary: #ffffff;
+  --tbl-text-secondary: rgba(255, 255, 255, 0.5);
+  --tbl-hover-bg: rgba(255, 255, 255, 0.12);
+  --tbl-played: var(--tbl-text-primary);
+  --tbl-unplayed: var(--tbl-text-secondary);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  background: transparent;
+  overflow: hidden;
+  pointer-events: auto;
+  color: var(--tbl-text-primary);
+  transition: background 0.3s;
+}
+.container[data-align="right"] {
+  flex-direction: row-reverse;
+}
+.container[data-theme="light"] {
+  --tbl-text-primary: #1a1a1a;
+  --tbl-text-secondary: rgba(0, 0, 0, 0.62);
+  --tbl-hover-bg: rgba(0, 0, 0, 0.08);
+}
+.container:hover {
+  background: var(--tbl-hover-bg);
+}
+/* 封面 */
+.cover-wrapper {
+  flex: 0 0 auto;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 0.15s ease;
+}
+.cover-wrapper:hover {
+  transform: scale(1.06);
+}
+.cover {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+  user-select: none;
+  pointer-events: none;
+  display: block;
+}
+.controls-wrapper {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  max-width: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.controls-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.container.is-hovered .controls-wrapper {
+  max-width: calc(3 * (100vh - 16px) + 16px);
+  pointer-events: auto;
+}
+.container.is-hovered .controls-inner {
+  opacity: 1;
+  transition-delay: 0.1s;
+}
+.control-btn {
+  flex: 0 0 auto;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--tbl-text-primary) 24%, transparent);
+  color: var(--tbl-text-primary);
+  cursor: pointer;
+  transition:
+    background 0.3s,
+    transform 0.3s;
+}
+.control-btn:hover {
+  background: color-mix(in srgb, var(--tbl-text-primary) 16%, transparent);
+}
+.control-btn:active {
+  transform: scale(0.9);
+}
+.control-icon {
+  width: 14px;
+  height: 14px;
+}
+.control-icon-play {
+  width: 12px;
+  height: 12px;
+}
+
+.lyric-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 4px;
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lyrics-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+.lyric-area:not(.spectrum-mode) .lyrics-layer {
+  opacity: 1;
+  transform: translateY(0);
+}
+.lyric-area.spectrum-mode .lyrics-layer {
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+}
+.lyric-area.spectrum-mode .spectrum-layer {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lyric-column {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+.container[data-align="right"] .lyric-column {
+  align-items: flex-end;
+}
+.container.is-hovered .lyrics-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+/* hover + 纯音乐：歌曲信息左侧，频谱右侧，避免挤一块 */
+.container.is-hovered .lyric-area.spectrum-mode .spectrum-layer {
+  opacity: 1;
+  inset: 0 4px 0 50%;
+  align-items: center;
+  padding-bottom: 0;
+}
+.container.is-hovered .lyric-area.spectrum-mode .song-info {
+  inset: 0 50% 0 0;
+  justify-content: center;
+}
+
+.lyric-line {
+  width: 100%;
+  transform-origin: left center;
+  transition:
+    font-size 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.3s ease;
+  will-change: transform, opacity;
+}
+.container[data-align="right"] .lyric-line {
+  transform-origin: right center;
+}
+.lyric-line[data-role="primary"] {
+  font-size: var(--tbl-font-size);
+  color: var(--tbl-text-primary);
+}
+.lyric-line[data-role="secondary"] {
+  font-size: calc(var(--tbl-font-size) * 0.82);
+  color: var(--tbl-text-secondary);
+}
+
+.line-move,
+.line-enter-active,
+.line-leave-active {
+  transition:
+    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    font-size 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.3s ease;
+}
+.line-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.line-enter-from {
+  opacity: 0;
+  transform: translateY(100%);
+}
+.line-leave-to {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+.song-info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    bottom 0.3s ease;
+}
+.container[data-align="right"] .song-info {
+  align-items: flex-end;
+}
+.container.is-hovered .song-info {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.08s;
+}
+.song-title {
+  font-size: var(--tbl-font-size);
+  color: var(--tbl-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.song-artist {
+  font-size: calc(var(--tbl-font-size) * 0.82);
+  color: var(--tbl-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+</style>

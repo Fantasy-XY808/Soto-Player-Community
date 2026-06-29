@@ -1,0 +1,102 @@
+import type { DesktopLyricSettings, DynamicIslandSettings, TaskbarLyricSettings } from "./settings";
+
+/** 窗口管理 API */
+export interface WindowApi {
+  /** 切换桌面歌词窗口 */
+  toggleDesktopLyric: () => Promise<boolean>;
+  /** 关闭桌面歌词窗口 */
+  closeDesktopLyric: () => Promise<void>;
+  /** 查询桌面歌词窗口是否处于打开状态 */
+  isDesktopLyricOpen: () => Promise<boolean>;
+  /** 订阅桌面歌词窗口开关状态变化 */
+  onDesktopLyricVisibilityChange: (callback: (open: boolean) => void) => () => void;
+  /** 切换灵动岛窗口 */
+  toggleDynamicIsland: () => Promise<boolean>;
+  /** 关闭灵动岛窗口 */
+  closeDynamicIsland: () => Promise<void>;
+  /** 查询灵动岛窗口是否处于打开状态 */
+  isDynamicIslandOpen: () => Promise<boolean>;
+  /** 订阅灵动岛窗口开关状态变化 */
+  onDynamicIslandVisibilityChange: (callback: (open: boolean) => void) => () => void;
+  /** 切换任务栏歌词窗口 */
+  toggleTaskbarLyric: () => Promise<boolean>;
+  /** 关闭任务栏歌词窗口 */
+  closeTaskbarLyric: () => Promise<void>;
+  /** 查询任务栏歌词窗口是否处于打开状态 */
+  isTaskbarLyricOpen: () => Promise<boolean>;
+  /** 订阅任务栏歌词窗口开关状态变化 */
+  onTaskbarLyricVisibilityChange: (callback: (open: boolean) => void) => () => void;
+  /** 最小化主窗口 */
+  minimize: () => void;
+  /** 切换最大化 / 还原 */
+  toggleMaximize: () => void;
+  /** 查询主窗口是否最大化 */
+  isMaximized: () => Promise<boolean>;
+  /** 订阅主窗口最大化状态变化 */
+  onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
+  /** 切换全屏 */
+  toggleFullscreen: () => void;
+  /** 查询主窗口是否全屏 */
+  isFullscreen: () => Promise<boolean>;
+  /** 订阅主窗口全屏状态变化 */
+  onFullscreenChange: (callback: (fullscreen: boolean) => void) => () => void;
+  /** 隐藏主窗口到托盘 */
+  hide: () => void;
+  /** 退出应用 */
+  quit: () => void;
+}
+
+/** 桌面歌词 API */
+export interface DesktopLyricApi {
+  /** 订阅配置变化 */
+  onConfigChange: (callback: (config: DesktopLyricSettings) => void) => () => void;
+  /** 将窗口高度锁定到指定像素 */
+  setHeight: (height: number) => Promise<void>;
+  /** 锁定态下切换鼠标穿透 */
+  setMouseIgnore: (ignore: boolean) => void;
+  /** 拖拽移动；只传位置，主进程持有权威尺寸 */
+  move: (x: number, y: number) => void;
+  /** 拖拽结束后存最终位置；程序 setBounds 不触发 moved 事件，需显式存 */
+  saveState: () => void;
+  /** 订阅主进程 screen 光标位置判定 */
+  onCursorInside: (callback: (inside: boolean) => void) => () => void;
+}
+
+/** 任务栏歌词布局事件 */
+export interface TaskbarLyricLayoutEvent {
+  isCentered: boolean;
+  systemType: string;
+  /** 任务栏是否浅色主题 */
+  isLight: boolean;
+  anchor: "left" | "right";
+}
+
+/** 任务栏歌词 API */
+export interface TaskbarLyricApi {
+  /** 订阅布局变化（锚定方向、居中与否、系统类型、任务栏主题） */
+  onLayout: (callback: (data: TaskbarLyricLayoutEvent) => void) => () => void;
+  /** 订阅配置变化 */
+  onConfigChange: (callback: (config: TaskbarLyricSettings) => void) => () => void;
+}
+
+/** 灵动岛 API */
+export interface DynamicIslandApi {
+  /** 订阅配置变化 */
+  onConfigChange: (callback: (config: DynamicIslandSettings) => void) => () => void;
+  /** 拖拽移动；只传位置，主进程持有权威尺寸 */
+  move: (x: number, y: number) => void;
+  /** 拖拽结束后存最终位置；主进程在落点近顶部时会自动吸附回居中 */
+  saveState: () => void;
+  /** 渲染端上报目标宽度，主进程立即 resize */
+  resize: (width: number) => void;
+  /** 渲染端上报目标高度 */
+  setHeight: (height: number) => void;
+  /** 渲染端一次上报宽高，主进程一次 setBounds（替代分开的 resize + setHeight，避免 IPC 顺序不确定） */
+  setBounds: (width: number, height: number) => void;
+  /** 查询当前吸附模式（HMR 后主进程不会主动重发，需主动拉取） */
+  getMode: () => Promise<"snapped" | "floating">;
+  /** 订阅吸附模式变化 */
+  onModeChange: (callback: (mode: "snapped" | "floating") => void) => () => void;
+  /** 订阅主进程 screen 光标位置判定（非遮挡模式下用于悬停隐藏） */
+  onCursorInside: (callback: (inside: boolean) => void) => () => void;
+}

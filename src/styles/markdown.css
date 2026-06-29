@@ -1,0 +1,62 @@
+.markdown-body {
+  line-height: 1.7;
+  font-size: 13px;
+  color: rgb(var(--s-on-surface) / 0.85);
+}
+.markdown-body h1 {
+  margin: 0 0 0.75em;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgb(var(--s-on-surface));
+}
+.markdown-body h2 {
+  margin: 1.4em 0 0.6em;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgb(var(--s-on-surface));
+}
+.markdown-body h3 {
+  margin: 1.1em 0 0.5em;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgb(var(--s-on-surface));
+}
+.markdown-body p {
+  margin: 0.5em 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5em 0;
+  padding-left: 1.3em;
+}
+.markdown-body ul {
+  list-style: disc;
+}
+.markdown-body ol {
+  list-style: decimal;
+}
+.markdown-body li {
+  margin: 0.25em 0;
+}
+.markdown-body strong {
+  font-weight: 600;
+  color: rgb(var(--s-on-surface));
+}
+.markdown-body a {
+  color: rgb(var(--s-primary));
+  text-decoration: none;
+}
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+.markdown-body code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgb(var(--s-on-surface) / 0.08);
+  font-size: 0.9em;
+}
+.markdown-body hr {
+  margin: 1.2em 0;
+  border: none;
+  border-top: 1px solid rgb(var(--s-on-surface) / 0.1);
+}

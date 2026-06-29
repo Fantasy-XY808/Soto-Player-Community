@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/icon" href="/icons/favicon.ico" />
+    <link rel="preload" href="/fonts/logo.woff2" as="font" type="font/woff2" crossorigin />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Soto-Player Community</title>
+    <style>
+      @font-face {
+        font-family: "logo";
+        src: url("/fonts/logo.woff2") format("woff2");
+        font-display: swap;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: #101014;
+      }
+      html.light body {
+        background: #f6f6f6;
+      }
+      #app-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #101014;
+        color: #e8e8ea;
+        transition: opacity 0.3s;
+      }
+      html.light #app-loading {
+        background: #f6f6f6;
+        color: #1a1a1c;
+      }
+      #app-loading.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        transform: translateZ(0);
+      }
+      .splash-logo {
+        width: 72px;
+        height: 72px;
+        will-change: transform, opacity;
+        animation:
+          splash-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both,
+          splash-flicker 1.8s ease-in-out 0.5s infinite;
+      }
+      .splash-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .splash-name {
+        font-family: "logo", sans-serif;
+        font-size: 34px;
+        line-height: 1;
+        will-change: transform, opacity;
+        animation: splash-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+      }
+      .splash-suffix {
+        font-family: "logo", sans-serif;
+        font-size: 24px;
+        line-height: 1;
+        opacity: 0.7;
+        will-change: transform, opacity;
+        animation: splash-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+      }
+      .splash-footer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 32px;
+        text-align: center;
+        font-size: 12px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+        animation: splash-rise-footer 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both;
+      }
+      @keyframes splash-rise {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes splash-rise-footer {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 0.4;
+          transform: translateY(0);
+        }
+      }
+      @keyframes splash-flicker {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
+      }
+    </style>
+    <script>
+      // 确定明暗模式
+      (function () {
+        let mode = "system";
+        try {
+          const raw = localStorage.getItem("theme");
+          if (raw) mode = JSON.parse(raw).mode || "system";
+        } catch (e) {}
+        const isDark =
+          mode === "dark" ||
+          (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (!isDark) document.documentElement.classList.add("light");
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="app-loading">
+      <div class="splash">
+        <img src="/icons/logo.svg" alt="Soto-Player Community" class="splash-logo" />
+        <div class="splash-brand">
+          <span class="splash-name">Soto Player</span>
+          <span class="splash-suffix">Community</span>
+        </div>
+      </div>
+      <div class="splash-footer">Soto-Player Community · 水芸音乐播放器 · © 2026 Soto</div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
