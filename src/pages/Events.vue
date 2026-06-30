@@ -5,6 +5,7 @@ import { useUserStore } from "@/stores/user";
 
 const { t } = useI18n();
 const user = useUserStore();
+const router = useRouter();
 
 /** 动态列表 */
 const events = shallowRef<EventItem[]>([]);
@@ -50,17 +51,53 @@ const loadMore = async (): Promise<void> => {
 };
 
 /** 解析动态 JSON 取主要内容 */
-const parseEvent = (item: EventItem): { text: string; cover?: string; title?: string } => {
+const parseEvent = (
+  item: EventItem,
+): { text: string; cover?: string; title?: string; refType?: string; refId?: string } => {
   try {
     const parsed = JSON.parse(item.json);
-    return {
-      text: parsed?.msg || parsed?.json?.msg || "",
-      cover: parsed?.song?.album?.picUrl || parsed?.playlist?.coverImgUrl || parsed?.album?.picUrl,
-      title: parsed?.song?.name || parsed?.playlist?.name || parsed?.album?.name,
-    };
+    // 引用实体优先级：song > playlist > album
+    if (parsed?.song?.id) {
+      return {
+        text: parsed?.msg || parsed?.json?.msg || "",
+        cover: parsed?.song?.album?.picUrl,
+        title: parsed?.song?.name,
+        refType: "song",
+        refId: String(parsed.song.id),
+      };
+    }
+    if (parsed?.playlist?.id) {
+      return {
+        text: parsed?.msg || parsed?.json?.msg || "",
+        cover: parsed?.playlist?.coverImgUrl,
+        title: parsed?.playlist?.name,
+        refType: "playlist",
+        refId: String(parsed.playlist.id),
+      };
+    }
+    if (parsed?.album?.id) {
+      return {
+        text: parsed?.msg || parsed?.json?.msg || "",
+        cover: parsed?.album?.picUrl,
+        title: parsed?.album?.name,
+        refType: "album",
+        refId: String(parsed.album.id),
+      };
+    }
+    return { text: parsed?.msg || parsed?.json?.msg || "" };
   } catch {
     return { text: "" };
   }
+};
+
+/** 点击引用条目跳转到对应详情页 */
+const onRefClick = (item: EventItem): void => {
+  const parsed = parseEvent(item);
+  if (!parsed.refType || !parsed.refId) return;
+  router.push({
+    name: "collection",
+    params: { source: "netease", type: parsed.refType, id: parsed.refId },
+  });
 };
 
 /** 格式化时间 */
@@ -140,7 +177,8 @@ watch(
               </p>
               <div
                 v-if="parseEvent(event).title"
-                class="mt-2 flex items-center gap-2 rounded-lg bg-on-surface/5 px-3 py-2"
+                class="mt-2 flex cursor-pointer items-center gap-2 rounded-lg bg-on-surface/5 px-3 py-2 transition-colors hover:bg-primary/10"
+                @click="onRefClick(event)"
               >
                 <IconLucideMusic class="size-4 shrink-0 text-primary/60" />
                 <span class="truncate text-sm text-on-surface-variant/70">

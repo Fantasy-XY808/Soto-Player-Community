@@ -149,7 +149,13 @@ const onLike = async (comment: NeteaseComment): Promise<void> => {
     comment.liked = wasLiked;
     comment.likedCount = wasCount;
     console.warn("[CommentPanel] like failed:", err);
-    toast.error(t("comment.likeFailed"));
+    // 301 = 未登录 / MUSIC_U 失效，引导重新登录而非通用失败
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("301")) {
+      toast.error(t("comment.loginExpired"));
+    } else {
+      toast.error(t("comment.likeFailed"));
+    }
   }
 };
 
@@ -182,10 +188,16 @@ const onSend = async (): Promise<void> => {
       if (err.code === 405) toast.error(t("comment.err405"));
       else if (err.code === 250) toast.error(t("comment.err250"));
       else if (err.code === 404) toast.error(t("comment.err404"));
+      else if (err.code === 301) toast.error(t("comment.loginExpired"));
       else toast.error(t("comment.errFailed"));
     } else {
       console.warn("[CommentPanel] send failed:", err);
-      toast.error(t("comment.errFailed"));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("301")) {
+        toast.error(t("comment.loginExpired"));
+      } else {
+        toast.error(t("comment.errFailed"));
+      }
     }
   } finally {
     sending.value = false;

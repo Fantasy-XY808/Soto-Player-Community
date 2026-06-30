@@ -126,6 +126,8 @@ const stopDof = (): void => {
 };
 
 // 激活态切换：FullPlayer 收起 / 暂停 / 开关关闭时停止 RAF，遵循 Hidden = silent
+// 注意：模板不挂 v-if，元素始终在 DOM——暂停时 stopDof 写入静态 blur(80px)，保留模糊封面背景；
+// 若用 v-if 卸载元素，暂停时景深消失，控件衬在 PlayerBackground solid 纯色上不可见
 watch(
   dofActive,
   (active) => {
@@ -197,7 +199,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="dofActive" ref="dofEl" class="cover-dof" aria-hidden="true">
+  <div ref="dofEl" class="cover-dof" aria-hidden="true">
     <img
       v-for="(layer, index) in blurLayers"
       :key="index"

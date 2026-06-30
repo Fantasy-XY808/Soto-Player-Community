@@ -12,6 +12,8 @@ interface QMSong {
   album?: string;
   albumMid?: string;
   duration: number;
+  /** QQ 音乐原唱标记（0/1，1 = 原唱） */
+  isoriginal?: number;
 }
 
 interface SongsResp {
@@ -40,6 +42,8 @@ const songToTrack = (song: QMSong): Track => {
     duration: song.duration ?? 0,
     cover,
     coverOriginal,
+    // QQ 音乐原唱标记（isoriginal=1 表示原唱版本）
+    original: song.isoriginal === 1,
   };
 };
 

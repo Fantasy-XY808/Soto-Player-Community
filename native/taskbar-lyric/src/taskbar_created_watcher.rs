@@ -95,7 +95,7 @@ impl TaskbarCreatedWatcher {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
                 WINDOW_CLASS,
-                w!("SPlayer Taskbar Watcher"),
+                w!("Soto-Player Taskbar Watcher"),
                 WS_OVERLAPPED,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,

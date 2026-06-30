@@ -505,6 +505,7 @@
     "err404": "无权限发送评论",
     "errFailed": "评论发送失败，请稍后重试",
     "likeFailed": "点赞失败，请稍后重试",
+    "loginExpired": "登录已失效，请重新登录网易云账号",
     "totalCount": "共 {count} 条评论",
     "reply": "回复",
     "hotLoading": "正在加载热评…",
@@ -518,6 +519,9 @@
     "size": "大小",
     "duration": "时长",
     "noResults": "没有匹配的歌曲",
+    "tags": {
+      "original": "原唱"
+    },
     "sort": {
       "mode": "排列方式",
       "order": "排序方向",

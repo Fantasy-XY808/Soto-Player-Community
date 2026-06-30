@@ -74,7 +74,7 @@ export const startServer = (): Promise<ExternalApiStatus> => {
       wsGate,
       upgradeWebSocket(() => wsHandlers),
     );
-    app.get("/", (c) => c.text("SPlayer Next external API"));
+    app.get("/", (c) => c.text("Soto-Player Community external API"));
 
     const wss = new WebSocketServer({ noServer: true });
     let settled = false;

@@ -109,6 +109,8 @@ export interface Track {
   fee?: TrackFee;
   /** 云盘歌曲 */
   cloud?: boolean;
+  /** 原唱曲目（翻唱版本标记，用于在标签栏区分原唱/翻唱） */
+  original?: boolean;
 }
 
 /** 歌曲详细信息 */

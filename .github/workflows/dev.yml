@@ -115,7 +115,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-Windows-setup-${{ matrix.arch }}
+          name: Soto-Player-Community-Windows-setup-${{ matrix.arch }}
           path: dist/*-setup.exe
 
       # 上传构建产物 (macOS)
@@ -123,14 +123,14 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-macOS-dmg-${{ matrix.arch }}
+          name: Soto-Player-Community-macOS-dmg-${{ matrix.arch }}
           path: dist/*.dmg
 
       - name: Upload macOS Zip
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-macOS-zip-${{ matrix.arch }}
+          name: Soto-Player-Community-macOS-zip-${{ matrix.arch }}
           path: dist/*.zip
 
       # 上传构建产物 (Linux)
@@ -138,26 +138,26 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-Linux-appimage-${{ matrix.arch }}
+          name: Soto-Player-Community-Linux-appimage-${{ matrix.arch }}
           path: dist/*.AppImage
 
       - name: Upload Linux DEB
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-Linux-deb-${{ matrix.arch }}
+          name: Soto-Player-Community-Linux-deb-${{ matrix.arch }}
           path: dist/*.deb
 
       - name: Upload Linux RPM
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-Linux-rpm-${{ matrix.arch }}
+          name: Soto-Player-Community-Linux-rpm-${{ matrix.arch }}
           path: dist/*.rpm
 
       - name: Upload Linux Tar
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-Linux-tar-${{ matrix.arch }}
+          name: Soto-Player-Community-Linux-tar-${{ matrix.arch }}
           path: dist/*.tar.gz

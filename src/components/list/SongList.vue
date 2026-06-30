@@ -633,6 +633,12 @@ defineExpose({
                     >
                       EP
                     </span>
+                    <span
+                      v-if="item.original"
+                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-emerald-500 border-emerald-500/40"
+                    >
+                      {{ t("songList.tags.original") }}
+                    </span>
                     <span class="truncate">
                       <template v-for="(artist, i) in item.artists" :key="artist.id ?? i">
                         <span

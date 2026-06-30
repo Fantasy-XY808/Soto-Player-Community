@@ -517,6 +517,7 @@
     "err404": "No permission to comment",
     "errFailed": "Failed to send comment, please try again later",
     "likeFailed": "Failed to like, please try again later",
+    "loginExpired": "Login expired, please re-login to Netease Cloud Music",
     "totalCount": "{count} comments",
     "reply": "Reply",
     "hotLoading": "Loading hot comments…",
@@ -530,6 +531,9 @@
     "size": "Size",
     "duration": "Duration",
     "noResults": "No matching songs",
+    "tags": {
+      "original": "Original"
+    },
     "sort": {
       "mode": "Sort Mode",
       "order": "Sort Order",

@@ -425,7 +425,7 @@ const toggleLyric = (): void => {
           <!-- 左侧 -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 w-[45%] flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="absolute inset-y-0 left-0 w-[38%] flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :style="coverCentered ? 'transform: translateX(calc(100% * 11 / 18))' : undefined"
           >
             <!-- 封面 + 歌曲信息 -->
@@ -450,9 +450,9 @@ const toggleLyric = (): void => {
           </div>
           <!-- 右侧 -->
           <div
-            class="group absolute inset-y-0 right-0 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="group absolute inset-y-0 right-0 pr-12 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              fullscreenCover ? 'w-1/2' : 'w-[55%]',
+              fullscreenCover ? 'w-1/2' : 'w-[62%]',
               coverCentered || status.fullQueueOpen || commentPanelOpen
                 ? 'opacity-0 pointer-events-none'
                 : 'opacity-100',

@@ -155,7 +155,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-${{ matrix.name }}
+          name: Soto-Player-Community-${{ matrix.name }}
           path: dist/*.*
 
   # 合并多架构更新清单并创建 GitHub 草稿 Release

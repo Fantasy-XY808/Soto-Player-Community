@@ -174,7 +174,7 @@ export const defaultSystemConfig: SystemConfig = {
     port: 14558,
   },
   listenTogether: {
-    enabled: false,
+    enabled: true,
     port: 23333,
     progressMode: "manual",
     progressInterval: 2000,
