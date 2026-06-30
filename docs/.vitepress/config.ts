@@ -15,7 +15,8 @@ export default defineConfig({
       "meta",
       {
         name: "keywords",
-        content: "Soto-Player,水芸音乐播放器,SPlayer-Next,音乐播放器,桌面歌词,流媒体,Electron,Vue3,Rust",
+        content:
+          "Soto-Player,水芸音乐播放器,SPlayer-Next,音乐播放器,桌面歌词,流媒体,Electron,Vue3,Rust",
       },
     ],
   ],
@@ -89,7 +90,9 @@ export default defineConfig({
       label: "文章目录",
     },
 
-    socialLinks: [{ icon: "github", link: "https://github.com/Fantasy-XY808/Soto-Player-Community" }],
+    socialLinks: [
+      { icon: "github", link: "https://github.com/Fantasy-XY808/Soto-Player-Community" },
+    ],
 
     footer: {
       message: "基于 AGPL-3.0 许可发布 · 基于 SPlayer-Next 二次开发",

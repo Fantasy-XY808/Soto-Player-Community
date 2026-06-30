@@ -142,11 +142,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 确认弹窗 -->
-    <SDialog
-      v-model:open="confirmOpen"
-      :title="t('settings.migration.confirmTitle')"
-      width="420"
-    >
+    <SDialog v-model:open="confirmOpen" :title="t('settings.migration.confirmTitle')" width="420">
       <div class="flex flex-col gap-3 py-2">
         <div class="flex items-start gap-3">
           <IconAlertTriangle class="size-5 text-warning shrink-0 mt-0.5" />

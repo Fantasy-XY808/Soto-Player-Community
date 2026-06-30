@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { useUpdateStore } from "@/stores/update";
 import { openExternal } from "@/utils/url";
-import { APP_VERSION, REPO_URL, REPO_NAME, HOMEPAGE_URL, COPYRIGHT_HOLDER, AUTHOR_URL } from "@/utils/config";
+import {
+  APP_VERSION,
+  REPO_URL,
+  REPO_NAME,
+  HOMEPAGE_URL,
+  COPYRIGHT_HOLDER,
+  AUTHOR_URL,
+} from "@/utils/config";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideGithub from "~icons/lucide/github";
 import IconLucideRss from "~icons/lucide/rss";

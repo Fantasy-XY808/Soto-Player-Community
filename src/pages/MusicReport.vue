@@ -152,9 +152,7 @@ const loadData = async (): Promise<void> => {
   }
 };
 
-const hasData = computed(
-  () => summary.value !== null && summary.value.totalPlayCount > 0,
-);
+const hasData = computed(() => summary.value !== null && summary.value.totalPlayCount > 0);
 
 // Top 1 曲目封面变化时提取调色板
 watch(
@@ -223,10 +221,7 @@ onMounted(() => {
               <div class="text-xs mb-0.5" :style="{ color: heroForegroundMuted }">
                 {{ t("musicReport.totalPlays") }}
               </div>
-              <div
-                class="text-xl font-semibold tabular-nums"
-                :style="{ color: heroForeground }"
-              >
+              <div class="text-xl font-semibold tabular-nums" :style="{ color: heroForeground }">
                 {{ summary?.totalPlayCount ?? 0 }}
                 <span class="text-xs font-normal" :style="{ color: heroForegroundMuted }">
                   {{ t("home.stats.unitSong") }}
@@ -238,10 +233,7 @@ onMounted(() => {
               <div class="text-xs mb-0.5" :style="{ color: heroForegroundMuted }">
                 {{ t("musicReport.streak") }}
               </div>
-              <div
-                class="text-xl font-semibold tabular-nums"
-                :style="{ color: heroForeground }"
-              >
+              <div class="text-xl font-semibold tabular-nums" :style="{ color: heroForeground }">
                 {{ summary?.streakDays ?? 0 }}
                 <span class="text-xs font-normal" :style="{ color: heroForegroundMuted }">
                   {{ t("home.stats.unitDay") }}
@@ -295,7 +287,9 @@ onMounted(() => {
             <div class="flex-1 h-7 bg-surface-variant/20 rounded-md overflow-hidden relative">
               <div
                 class="absolute inset-y-0 left-0 bg-primary/80 rounded-md transition-all duration-700 ease-out flex items-center justify-end px-2"
-                :style="{ width: `${Math.max(((summary?.weekListenedMs ?? 0) / weekBarBase) * 100, 2)}%` }"
+                :style="{
+                  width: `${Math.max(((summary?.weekListenedMs ?? 0) / weekBarBase) * 100, 2)}%`,
+                }"
               >
                 <span class="text-xs text-on-primary font-medium tabular-nums">
                   {{ weekDuration.value }}{{ weekDuration.unit === "h" ? "h" : "m" }}
@@ -314,7 +308,9 @@ onMounted(() => {
             <div class="flex-1 h-7 bg-surface-variant/20 rounded-md overflow-hidden relative">
               <div
                 class="absolute inset-y-0 left-0 bg-on-surface-variant/40 rounded-md transition-all duration-700 ease-out flex items-center justify-end px-2"
-                :style="{ width: `${Math.max(((summary?.lastWeekListenedMs ?? 0) / weekBarBase) * 100, 2)}%` }"
+                :style="{
+                  width: `${Math.max(((summary?.lastWeekListenedMs ?? 0) / weekBarBase) * 100, 2)}%`,
+                }"
               >
                 <span
                   v-if="lastWeekDuration.value > 0"
@@ -383,7 +379,10 @@ onMounted(() => {
           <div class="text-sm font-medium text-on-surface mb-4">
             {{ t("musicReport.topArtists") }}
           </div>
-          <div v-if="topArtists.length === 0" class="text-xs text-on-surface-variant/40 py-4 text-center">
+          <div
+            v-if="topArtists.length === 0"
+            class="text-xs text-on-surface-variant/40 py-4 text-center"
+          >
             {{ t("common.noData") }}
           </div>
           <div v-else class="space-y-3">
@@ -426,7 +425,10 @@ onMounted(() => {
           <div class="text-sm font-medium text-on-surface mb-4">
             {{ t("musicReport.topSongs") }}
           </div>
-          <div v-if="topTracks.length === 0" class="text-xs text-on-surface-variant/40 py-4 text-center">
+          <div
+            v-if="topTracks.length === 0"
+            class="text-xs text-on-surface-variant/40 py-4 text-center"
+          >
             {{ t("common.noData") }}
           </div>
           <div v-else class="space-y-2">

@@ -708,11 +708,7 @@ const toggleLyric = (): void => {
             </div>
           </div>
           <div class="flex-1 min-w-0 flex items-center justify-end">
-            <Toolbar
-              cover
-              @open-comment="onCommentClick"
-              @open-lyric-card="lyricCardOpen = true"
-            />
+            <Toolbar cover @open-comment="onCommentClick" @open-lyric-card="lyricCardOpen = true" />
           </div>
         </div>
       </div>

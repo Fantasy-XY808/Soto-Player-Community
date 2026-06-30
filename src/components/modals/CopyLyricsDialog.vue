@@ -215,7 +215,9 @@ const handleExport = async (): Promise<void> => {
         </div>
         <!-- 卡片样式选择 -->
         <div class="flex items-center gap-2 pt-1">
-          <span class="text-xs text-on-surface/50 shrink-0">{{ t("player.copyLyric.cardStyle") }}</span>
+          <span class="text-xs text-on-surface/50 shrink-0">
+            {{ t("player.copyLyric.cardStyle") }}
+          </span>
           <div class="flex items-center gap-1 flex-wrap">
             <SButton
               v-for="opt in styleOptions"

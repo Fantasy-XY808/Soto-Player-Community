@@ -392,10 +392,15 @@ export const createLyricPoster = async (options: LyricPosterOptions): Promise<Bl
 
   const titleSize = fontSizeFromFont(cfg.titleFont);
   const artistSize = fontSizeFromFont(cfg.artistFont);
-  const headerHeight =
-    cfg.thumbSize > 0 ? cfg.thumbSize : titleSize + artistSize + 30;
+  const headerHeight = cfg.thumbSize > 0 ? cfg.thumbSize : titleSize + artistSize + 30;
   const totalHeight =
-    cfg.padTop + headerHeight + HEADER_GAP + lyricsHeight + cfg.watermarkGap + WATERMARK_H + PAD_BOTTOM;
+    cfg.padTop +
+    headerHeight +
+    HEADER_GAP +
+    lyricsHeight +
+    cfg.watermarkGap +
+    WATERMARK_H +
+    PAD_BOTTOM;
 
   // 超长海报降采样，避免超出画布像素上限导致导出空白
   const scale = Math.min(SCALE, MAX_CANVAS_PX / totalHeight);

@@ -135,11 +135,7 @@ const buildBlobColors = (): RGB[] => {
   }
   if (props.dominantColor) {
     // 单主色:派生 6 个色相偏移变体
-    const [h, s, v] = rgbToHsv(
-      props.dominantColor.r,
-      props.dominantColor.g,
-      props.dominantColor.b,
-    );
+    const [h, s, v] = rgbToHsv(props.dominantColor.r, props.dominantColor.g, props.dominantColor.b);
     return Array.from({ length: 6 }, (_, i) => {
       const dh = (i - 2.5) * 18; // ±45° 色相分散
       return hsvToRgb((h + dh + 360) % 360, Math.min(1, s + 0.1), Math.min(1, v + 0.05));
@@ -160,7 +156,7 @@ const buildBlobColors = (): RGB[] => {
 const initBlobs = (): void => {
   const colors = buildBlobColors();
   const result: Blob[] = colors.map((color, i) => ({
-    x: 0.15 + (i / colors.length) + (Math.random() - 0.5) * 0.2,
+    x: 0.15 + i / colors.length + (Math.random() - 0.5) * 0.2,
     y: 0.2 + Math.random() * 0.6,
     radius: 0.28 + Math.random() * 0.18,
     color,

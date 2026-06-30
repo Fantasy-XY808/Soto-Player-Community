@@ -84,12 +84,7 @@ const hasSecondPart = computed(() => secondPart.value.length > 0);
     </Transition>
     <div v-else class="fallback-block">
       <p class="fallback-text">{{ fallbackText }}</p>
-      <button
-        v-if="showRetry"
-        class="retry-btn"
-        type="button"
-        @click="props.onRetry?.()"
-      >
+      <button v-if="showRetry" class="retry-btn" type="button" @click="props.onRetry?.()">
         {{ t("comment.retry") }}
       </button>
     </div>

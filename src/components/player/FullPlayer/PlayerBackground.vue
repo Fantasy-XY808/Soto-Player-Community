@@ -4,18 +4,32 @@ import { useThemeStore } from "@/stores/theme";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import DEFAULT_COVER from "@/assets/images/song.jpg";
-import BackgroundRender from "./BackgroundRender.vue";
 
 const media = useMediaStore();
 const settings = useSettingsStore();
 const theme = useThemeStore();
 const status = useStatusStore();
 
-const bgType = computed(() => settings.player.playerBgType as string);
+/**
+ * 实际渲染的背景类型
+ *
+ * 互斥规则：用户选 blur 时，若 CoverDepthOfField 或 FluidBackground 已启用，
+ * 自动让位为 solid。原因：CoverDepthOfField 自带 blur(80px) 全屏滤镜且同样是
+ * 封面+模糊（与 blur 模式视觉重复），FluidBackground 自带 blur(60px) 全屏滤镜；
+ * 三层叠加让 GPU 每帧做 3 次全屏高斯模糊——是"功能和特效全开特别卡"的核心根因。
+ */
+const bgType = computed<"blur" | "solid">(() => {
+  const userChoice = settings.player.playerBgType;
+  if (userChoice !== "blur") return "solid";
+  if (settings.appearance.coverDepthOfField || settings.player.enableFluidBackground) {
+    return "solid";
+  }
+  return "blur";
+});
 
 /**
  * 背景是否就绪
- * 展开后延迟 500ms 再挂载，收起后延迟 500ms 卸载以释放 WebGL 上下文 / 模糊位图
+ * 展开后延迟 500ms 再挂载，收起后延迟 500ms 卸载以释放模糊位图
  */
 const bgReady = ref(false);
 let bgReadyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -42,13 +56,6 @@ watch(
 );
 
 onBeforeUnmount(() => clearTimeout(bgReadyTimer));
-
-// 流体背景播放态
-const bgPlaying = computed(() => {
-  if (!status.isExpanded) return false;
-  if (!status.isPlaying && settings.player.playerBgFreezeOnPause) return false;
-  return true;
-});
 
 // 封面颜色（纯色模式）
 const coverColor = computed(() => {
@@ -121,15 +128,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- 纯色背景 -->
-  <div
-    v-if="bgType !== 'blur' && bgType !== 'animation'"
-    class="absolute inset-0 overflow-hidden -z-1 bg-solid-wrap"
-  >
+  <!-- 纯色背景（含互斥让位：CoverDepthOfField / FluidBackground 启用时强制走此分支） -->
+  <div v-if="bgType !== 'blur'" class="absolute inset-0 overflow-hidden -z-1 bg-solid-wrap">
     <div class="color" :style="{ backgroundColor: `rgb(${coverColor})` }" />
   </div>
-  <!-- 模糊背景 -->
-  <Transition v-else-if="bgType === 'blur'" name="bg-fade">
+  <!-- 模糊背景（仅在没有其他全屏 blur 层时挂载，避免 3 层全屏 blur 叠加卡顿） -->
+  <Transition v-else name="bg-fade">
     <div v-if="bgReady" class="absolute inset-0 overflow-hidden -z-1 bg-blur-wrap">
       <img
         v-for="(layer, index) in blurLayers"
@@ -138,20 +142,6 @@ onBeforeUnmount(() => {
         :class="['bg-img', { active: layer.active }]"
         decoding="async"
         alt=""
-      />
-    </div>
-  </Transition>
-  <!-- 流体背景 -->
-  <Transition v-else name="bg-fade">
-    <div v-if="bgReady" class="absolute inset-0 overflow-hidden -z-1">
-      <BackgroundRender
-        :album="media.track?.cover || DEFAULT_COVER"
-        :playing="bgPlaying"
-        :fps="settings.player.playerBgFps"
-        :flow-speed="settings.player.playerBgFlowSpeed"
-        :render-scale="settings.player.playerBgRenderScale"
-        :has-lyric="media.parsedLyric.length > 0"
-        :enable-beat="settings.player.playerBgBeat"
       />
     </div>
   </Transition>

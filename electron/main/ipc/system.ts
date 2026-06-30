@@ -132,9 +132,7 @@ export const registerSystemIpc = (): void => {
     if (!fontsCache) {
       fontsCache = Promise.race([
         getFonts({ disableQuoting: true }),
-        new Promise<string[]>((resolve) =>
-          setTimeout(() => resolve([]), FONTS_TIMEOUT_MS),
-        ),
+        new Promise<string[]>((resolve) => setTimeout(() => resolve([]), FONTS_TIMEOUT_MS)),
       ])
         .then((list) => {
           // 不长期缓存：允许下次重试，避免一次失败/超时后用户再也看不到字体列表

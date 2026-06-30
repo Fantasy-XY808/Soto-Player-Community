@@ -34,8 +34,10 @@ const { scale: breathingScale } = useBreathing();
 
 /**
  * 景深激活：仅在 FullPlayer 展开 + 播放中 + 开关开启时跑 RAF / FFT
- * 不再排斥 blur 背景模式——景深层有 FFT 动态调制（blur 半径随低频变化），
- * 与静态 blur 背景是不同效果，叠加有增益；用户如嫌 GPU 负担可手动关其一
+ *
+ * 与 PlayerBackground.blur 的关系：PlayerBackground 内部已加互斥规则——
+ * 本层启用时 PlayerBackground 自动让位为 solid，避免 blur(80px) 与 blur(45px) 两层
+ * 全屏高斯模糊叠加（GPU 每帧做 2 次全屏模糊，是卡顿核心根因）
  */
 const dofActive = computed(
   () => settings.appearance.coverDepthOfField && isExpanded.value && isPlaying.value,

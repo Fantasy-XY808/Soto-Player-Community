@@ -33,7 +33,10 @@ interface VkeyResp {
  * @param filename   形如 M500${mid}.mp3，前缀决定码率：M500=128k mp3 / M800=320k mp3 / C600=128k m4a
  * @returns purl（空字符串表示服务端拒绝或无权限）
  */
-const fetchPurl = async (mid: string, filename: string): Promise<{ purl: string; sip?: string }> => {
+const fetchPurl = async (
+  mid: string,
+  filename: string,
+): Promise<{ purl: string; sip?: string }> => {
   const data = await qmRequest<VkeyResp>("music.vkey.GetVkeyServer", "CgiGetVkey", {
     guid: "1008610010",
     songmid: [mid],
