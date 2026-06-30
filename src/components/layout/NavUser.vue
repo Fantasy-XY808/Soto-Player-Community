@@ -6,6 +6,7 @@ import vipImg from "@/assets/images/vip.png";
 import IconLucideListMusic from "~icons/lucide/list-music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideUserRound from "~icons/lucide/user-round";
+import IconLucideUserPlus from "~icons/lucide/user-plus";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -13,6 +14,7 @@ const user = useUserStore();
 
 const loginOpen = ref(false);
 const popoverOpen = ref(false);
+const addAccountOpen = ref(false);
 
 /** 启动时校验登录态（cookie 仍有效就刷新 profile） */
 onMounted(() => {
@@ -47,6 +49,13 @@ const stats = computed(() => [
   },
 ]);
 
+/** 可添加的附加账户平台（网易云为主账户，已在登录对话框处理） */
+const addonPlatforms = [
+  { key: "qqmusic" as const, label: t("login.platformQQMusic") },
+  { key: "kugou" as const, label: t("login.platformKugou") },
+  { key: "qishui" as const, label: t("login.platformQishui") },
+];
+
 const onTriggerClick = (): void => {
   if (!user.isLoggedIn) loginOpen.value = true;
 };
@@ -66,6 +75,17 @@ const handleLogout = async (): Promise<void> => {
   if (!ok) return;
   await user.logout();
   toast.success(t("login.logoutDone"));
+};
+
+/** 点击附加平台登录按钮——后端登录实现尚在开发中 */
+const handleAddonLogin = (platform: "qqmusic" | "kugou" | "qishui"): void => {
+  toast.info(
+    t("login.platformComingSoon", {
+      platform: t(`login.platform${platform.charAt(0).toUpperCase()}${platform.slice(1)}`),
+    }),
+  );
+  addAccountOpen.value = false;
+  popoverOpen.value = false;
 };
 </script>
 
@@ -163,6 +183,27 @@ const handleLogout = async (): Promise<void> => {
         <template #icon><IconLucideLogOut /></template>
         {{ t("login.logout") }}
       </SButton>
+      <SDivider class="w-full" />
+      <!-- 添加账户：展开后显示附加平台登录按钮 -->
+      <SButton variant="ghost" size="small" block @click="addAccountOpen = !addAccountOpen">
+        <template #icon><IconLucideUserPlus /></template>
+        {{ t("login.addAccount") }}
+        <IconLucideChevronDown
+          :class="['size-3 ml-auto transition-transform', addAccountOpen && 'rotate-180']"
+        />
+      </SButton>
+      <div v-if="addAccountOpen" class="w-full flex flex-col gap-1.5">
+        <SButton
+          v-for="p in addonPlatforms"
+          :key="p.key"
+          variant="tertiary"
+          size="small"
+          block
+          @click="handleAddonLogin(p.key)"
+        >
+          {{ p.label }}
+        </SButton>
+      </div>
     </div>
   </SPopover>
 

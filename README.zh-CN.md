@@ -6,7 +6,7 @@
 
 <p>🎵 跨平台桌面音乐播放器，基于 SPlayer-Next 二次开发，增强播放界面视觉与社区体验</p>
 
-<p>上游 <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a> · 视觉灵感来自 <a href="https://github.com/sxyazi/BetterLyrics">BetterLyrics</a></p>
+<p>上游 <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a></p>
 
 [![Stars](https://img.shields.io/github/stars/Fantasy-XY808/Soto-Player-Community?style=flat)](https://github.com/Fantasy-XY808/Soto-Player-Community/stargazers)
 [![Release](https://img.shields.io/github/v/release/Fantasy-XY808/Soto-Player-Community)](https://github.com/Fantasy-XY808/Soto-Player-Community/releases)
@@ -88,12 +88,13 @@ pnpm build:native     # 仅构建 Rust 原生模块（加 `--dev` 为 debug 构�
 
 ## 致谢
 
-本项目是 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)（作者 imsyy）的二次开发版本，播放界面流体特效与歌词卡片视觉灵感来自 [BetterLyrics](https://github.com/sxyazi/BetterLyrics)，在此一并致谢。
+本项目是 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)（作者 imsyy）的二次开发版本，在此致谢上游项目与作者。
 
 - [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) —— 本项目上游，现代化桌面音乐播放器
-- [BetterLyrics](https://github.com/sxyazi/BetterLyrics) —— 流体背景与歌词卡片视觉灵感来源
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) —— 类 Apple Music 歌词显示组件库
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) —— 网易云音乐 API 备份 + 增强
+
+> 视觉灵感部分参考 [BetterLyrics](https://github.com/sxyazi/BetterLyrics) 等社区开源项目。
 
 ## 开源许可
 

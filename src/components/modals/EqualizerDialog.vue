@@ -12,7 +12,7 @@ const { t } = useI18n();
   <SDialog
     :open="open"
     :title="t('equalizer.title')"
-    width="860px"
+    width="640px"
     @update:open="emit('update:open', $event)"
   >
     <EqualizerControl />

@@ -50,4 +50,15 @@ export const migrations: Migration[] = [
       if (!Array.isArray(eq.customPresets)) eq.customPresets = [];
     },
   },
+  {
+    version: 2,
+    migrate: (data) => {
+      // 一起听侧栏入口默认开启：旧版本 enabled 默认 false，老用户 settings.json 持久化了 false，
+      // deepMerge 让存档覆盖默认值，导致侧栏入口永不显示。这里一次性回退到 true，
+      // 之后仍尊重用户手动关闭的选择
+      if (typeof data.listenTogether === "object" && data.listenTogether !== null) {
+        data.listenTogether.enabled = true;
+      }
+    },
+  },
 ];

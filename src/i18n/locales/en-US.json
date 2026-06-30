@@ -361,7 +361,12 @@
     "logout": "Sign out",
     "logoutConfirmTitle": "Sign out",
     "logoutConfirmDesc": "Sign out of the current account?",
-    "logoutDone": "Signed out"
+    "logoutDone": "Signed out",
+    "addAccount": "Add account",
+    "platformQQMusic": "QQ Music",
+    "platformKugou": "Kugou Music",
+    "platformQishui": "Qishui Music",
+    "platformComingSoon": "{platform} account login is coming soon"
   },
   "search": {
     "title": "Search",
@@ -841,7 +846,8 @@
       "officialSite": "Official Site",
       "showMore": "More Contributors",
       "collapse": "Collapse",
-      "description": "Soto-Player Community — a community fork of SPlayer-Next, retaining the native audio engine. Fluid visuals and lyric card design inspired by BetterLyrics.",
+      "description": "Soto-Player Community — a community fork of SPlayer-Next, retaining the native audio engine.",
+      "visualInspiration": "Visual inspiration partly from BetterLyrics and other community projects",
       "role": {
         "author": "Author"
       }

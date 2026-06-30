@@ -46,11 +46,6 @@ const dependencies: Dependency[] = [
     url: "https://github.com/SPlayer-Dev/SPlayer-Next",
   },
   {
-    name: "BetterLyrics",
-    description: "播放界面流体特效与歌词卡片视觉灵感来源",
-    url: "https://github.com/sxyazi/BetterLyrics",
-  },
-  {
     name: "applemusic-like-lyrics",
     description: "类 Apple Music 歌词显示组件库",
     url: "https://github.com/Steve-xmh/applemusic-like-lyrics",
@@ -146,6 +141,9 @@ const developers = computed(() => {
           </div>
         </button>
       </div>
+      <p class="mt-2 px-1 text-[11px] text-on-surface-variant/50">
+        {{ t("settings.about.visualInspiration") }}
+      </p>
     </section>
 
     <!-- 开发人员 -->

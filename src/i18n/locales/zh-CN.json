@@ -349,7 +349,12 @@
     "logout": "退出登录",
     "logoutConfirmTitle": "退出登录",
     "logoutConfirmDesc": "确认退出当前账号？",
-    "logoutDone": "已退出登录"
+    "logoutDone": "已退出登录",
+    "addAccount": "添加账户",
+    "platformQQMusic": "QQ音乐",
+    "platformKugou": "酷狗音乐",
+    "platformQishui": "汽水音乐",
+    "platformComingSoon": "{platform} 账户登录功能开发中，敬请期待"
   },
   "search": {
     "title": "搜索",
@@ -814,7 +819,8 @@
       "officialSite": "官方网站",
       "showMore": "更多贡献者",
       "collapse": "收起",
-      "description": "水芸音乐播放器 — 基于 SPlayer-Next 二次开发的社区分支，沿用上游原生音频引擎，流体特效与歌词卡片视觉灵感来自 BetterLyrics。",
+      "description": "水芸音乐播放器 — 基于 SPlayer-Next 二次开发的社区分支，沿用上游原生音频引擎。",
+      "visualInspiration": "视觉灵感部分参考 BetterLyrics 等社区开源项目",
       "role": {
         "author": "作者"
       }

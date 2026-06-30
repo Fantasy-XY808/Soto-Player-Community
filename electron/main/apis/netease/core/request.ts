@@ -115,8 +115,16 @@ const processCookieObject = (
   }
 
   if (!processed.MUSIC_U) {
-    processed.MUSIC_A = processed.MUSIC_A || getAnonymousToken();
-    if (!processed.MUSIC_A) delete processed.MUSIC_A;
+    // 未登录态：优先用内存中的 anonymousToken（刚刚注册的，最新）
+    // 持久化的 session.MUSIC_A 可能跨重启后已被服务端失效，不信任它
+    const anon = getAnonymousToken();
+    if (anon) {
+      processed.MUSIC_A = anon;
+    } else if (processed.MUSIC_A) {
+      // 内存没有但 session 有：保留 session 的，让服务端判定（失败则由 ensureAnonymousToken 触发重注册）
+    } else {
+      delete processed.MUSIC_A;
+    }
   }
 
   return processed;

@@ -159,13 +159,21 @@ const ANONYMOUS_REGISTER_COOLDOWN_MS = 30 * 1000;
 const ensureAnonymousToken = async (session: Record<string, string>): Promise<void> => {
   if (session.MUSIC_U) return;
   if (getAnonymousToken()) return;
-  if (session.MUSIC_A) return;
+  // 不信任 session.MUSIC_A：持久化的 MUSIC_A 跨重启后可能已被服务端失效，
+  // 信任它会直接 short-circuit 导致 comment_music 等 weapi 接口持续 301。
+  // 改由 processCookieObject 在请求时注入内存中的 anonymousToken（若已注册）；
+  // 没有就触发注册流程
   // 失败冷却期内跳过注册，让业务接口按既有逻辑报错（避免无意义重复请求）
   if (Date.now() < anonymousRegisterCooldownUntil) return;
   if (!anonymousRegisterPromise) {
     anonymousRegisterPromise = (async () => {
       try {
         await callNetease("register_anonimous", {});
+        // 注册返回但没拿到 token（风控期 code:200 无 token 字段）→ 进冷却，避免死循环
+        if (!getAnonymousToken()) {
+          coreLog.warn("[netease] register_anonimous returned 200 but no token");
+          anonymousRegisterCooldownUntil = Date.now() + ANONYMOUS_REGISTER_COOLDOWN_MS;
+        }
       } catch (err) {
         // 失败不阻塞后续业务调用；让原始接口按既有逻辑报错
         coreLog.warn("[netease] register_anonimous failed:", err);

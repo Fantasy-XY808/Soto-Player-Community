@@ -6,7 +6,7 @@
 
 <p>🎵 A modern cross-platform desktop music player — a community-driven fork of SPlayer-Next with enhanced visuals and UX.</p>
 
-<p>Based on <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a> · Visual inspiration from <a href="https://github.com/sxyazi/BetterLyrics">BetterLyrics</a></p>
+<p>Based on <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a></p>
 
 [![Stars](https://img.shields.io/github/stars/Fantasy-XY808/Soto-Player-Community?style=flat)](https://github.com/Fantasy-XY808/Soto-Player-Community/stargazers)
 [![Release](https://img.shields.io/github/v/release/Fantasy-XY808/Soto-Player-Community)](https://github.com/Fantasy-XY808/Soto-Player-Community/releases)
@@ -89,12 +89,13 @@ pnpm build:native     # Build the Rust native modules only (add `--dev` for debu
 
 ## Acknowledgements
 
-This project is a fork of [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) by imsyy. The fluid playback visuals and lyric card design are inspired by [BetterLyrics](https://github.com/sxyazi/BetterLyrics). Special thanks to both projects and their authors.
+This project is a fork of [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) by imsyy. Special thanks to the upstream project and its author.
 
 - [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) — upstream project, modern desktop music player
-- [BetterLyrics](https://github.com/sxyazi/BetterLyrics) — fluid background and lyric card visual inspiration
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) — Apple Music-style lyrics display component library
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) — NetEase Cloud Music API (backup + enhanced)
+
+> Visual inspiration partly from [BetterLyrics](https://github.com/sxyazi/BetterLyrics) and other community open-source projects.
 
 ## License
 
