@@ -136,7 +136,7 @@ export const resolveByPlugin = async (
 /**
  * 解析在线音频源 URL
  * 三个平台都先走官方接口（匿名态拿 128k），失败 / 无版权再回落插件。
- * 关键：官方接口已尝试但返回 null 时，若用户没装插件，报 URL_RESOLVE_FAILED
+ * 关键：官方接口已尝试但返回 null 时，若用户没装插件，报 url_RESOLVE_FAILED
  * 而不是 NO_PLUGIN_AVAILABLE —— "未找到插件"文案对"VIP/版权无法播放"场景是误导。
  * @param track - 要解析的 track
  * @param songLevel - 在线歌曲音质档位（仅网易云官方接口生效）
