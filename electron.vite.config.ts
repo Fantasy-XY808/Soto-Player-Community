@@ -51,6 +51,7 @@ export default defineConfig({
       __APP_AUTHOR__: JSON.stringify(pkg.author.name),
       __APP_HOMEPAGE__: JSON.stringify(pkg.homepage),
       __APP_AUTHOR_URL__: JSON.stringify(pkg.author.url),
+      "import.meta.env.VITE_APP_VERSION": JSON.stringify(pkg.version),
     },
     server: {
       port: 14558,

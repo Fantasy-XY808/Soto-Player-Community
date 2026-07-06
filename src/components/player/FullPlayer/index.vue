@@ -21,22 +21,25 @@ import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounde
 import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideDownload from "~icons/lucide/download";
 import IconLucideMessageCircle from "~icons/lucide/message-circle";
-import FluidBackground from "./FluidBackground.vue";
 import SnowBackground from "./SnowBackground.vue";
 import FogBackground from "./FogBackground.vue";
 import RaindropBackground from "./RaindropBackground.vue";
-import CoverDepthOfField from "./CoverDepthOfField.vue";
 import AroundCoverSpectrum from "./AroundCoverSpectrum.vue";
 import PureMusicComment from "./PureMusicComment.vue";
 import CommentPanel from "./CommentPanel.vue";
 import { usePaletteExtractor } from "@/composables/usePaletteExtractor";
+import { useFpsMonitor } from "@/composables/useFpsMonitor";
 import { useSongComments } from "@/composables/useSongComments";
 import { isPureMusic } from "@shared/utils/pureMusicDetect";
 import { toast } from "@/composables/useToast";
+import { useControlEnhance } from "@/composables/useControlEnhance";
 
 const status = useStatusStore();
 const media = useMediaStore();
 const settings = useSettingsStore();
+
+/** 控件可见性增强 */
+const { enhanceClass, autoStyleVars } = useControlEnhance();
 const fav = useFavorite();
 
 /** 封面调色板提取 */
@@ -55,7 +58,6 @@ const { t } = useI18n();
 const {
   isPlaying,
   isLoading,
-  position,
   duration,
   isExpanded,
   repeatMode,
@@ -64,6 +66,9 @@ const {
   fmMode,
   showLyric,
 } = storeToRefs(status);
+
+/** 进度位置：用 computed 局部化，避免 position 5Hz 变化触发 FullPlayer 全量重渲染 */
+const position = computed(() => status.position);
 
 /** 歌词组件引用 */
 const lyricRef = ref<InstanceType<typeof Lyrics>>();
@@ -215,6 +220,11 @@ const coverCentered = computed(() => {
   return settings.player.autoCenterCover && !hasDisplayableLyric.value;
 });
 
+/** 镜像布局是否生效：居中状态强制不生效 */
+const mirrorEffective = computed(
+  () => settings.player.mirrorLayout && !coverCentered.value && !fullscreenCover.value,
+);
+
 /** 弹簧配置 */
 const springConfig = computed(() => ({
   mass: settings.lyric.springMass,
@@ -296,6 +306,26 @@ watch(immersiveEnabled, (on) => {
 
 onBeforeUnmount(() => clearTimeout(idleTimer));
 
+/**
+ * 频谱亮度/颜色 CSS 变量
+ *
+ * 固定值（spectrumBrightness）与智能模式（spectrumSmartDim）独立设置、互不冲突：
+ * 智能模式开启时，鼠标悬浮顶/底栏控件则在此基础上叠加调暗 + 去饱和，突出控件。
+ * 颜色由 spectrumColorMode 决定：cover 跟随封面色，custom 使用自定义颜色。
+ */
+const spectrumStyleVars = computed(() => {
+  const brightness = settings.player.spectrumBrightness;
+  const dimActive = settings.player.spectrumSmartDim && barHovered.value;
+  return {
+    "--spectrum-brightness": dimActive ? String(brightness * 0.55) : String(brightness),
+    "--spectrum-saturate": dimActive ? "0.6" : "1",
+    "--spectrum-color":
+      settings.player.spectrumColorMode === "custom"
+        ? settings.player.spectrumCustomColor
+        : "rgb(var(--s-cover))",
+  };
+});
+
 /** 添加到歌单 */
 const {
   open: pickerOpen,
@@ -319,6 +349,74 @@ const toggleLyric = (): void => {
     showLyric.value = !showLyric.value;
   }
 };
+
+/** 特效自动降级：连续低帧率时关闭流体/雾气背景 */
+const effectDowngradeActive = computed(
+  () =>
+    settings.player.enableEffectAutoDowngrade &&
+    isExpanded.value &&
+    (settings.player.enableFluidBackground || settings.player.enableFogBackground),
+);
+const {
+  lowFpsCount,
+  severeLowFpsCount,
+  reset: resetFpsCooldown,
+} = useFpsMonitor(effectDowngradeActive);
+
+/** 用户手动重开后本会话不再自动降级 */
+const userOverrodeDowngrade = ref(false);
+/** 自动降级进行中标记，防止触发 manual watch 误判 */
+let isAutoDowngrading = false;
+
+watch(lowFpsCount, (count) => {
+  if (!settings.player.enableEffectAutoDowngrade || userOverrodeDowngrade.value) return;
+  if (count < 3) return;
+  const closed: string[] = [];
+  isAutoDowngrading = true;
+  if (settings.player.enableFluidBackground) {
+    settings.player.enableFluidBackground = false;
+    closed.push(t("settings.enableFluidBackground.label"));
+  }
+  if (settings.player.enableFogBackground) {
+    settings.player.enableFogBackground = false;
+    closed.push(t("settings.enableFogBackground.label"));
+  }
+  void nextTick(() => {
+    isAutoDowngrading = false;
+  });
+  if (closed.length > 0) {
+    toast.warning(t("player.effectAutoDowngradeToast", { effects: closed.join("、") }));
+  }
+});
+
+watch(severeLowFpsCount, (count) => {
+  if (!settings.player.enableEffectAutoDowngrade || userOverrodeDowngrade.value) return;
+  if (count < 5 || !settings.player.enableFluidBackground) return;
+  isAutoDowngrading = true;
+  settings.player.enableFluidBackground = false;
+  void nextTick(() => {
+    isAutoDowngrading = false;
+  });
+  toast.warning(
+    t("player.effectAutoDowngradeToast", { effects: t("settings.enableFluidBackground.label") }),
+  );
+});
+
+watch(
+  () =>
+    [
+      settings.player.enableFluidBackground,
+      settings.player.enableFogBackground,
+    ] as const,
+  (next, prev) => {
+    if (isAutoDowngrading) return;
+    const turnedOn = next.some((v, i) => v && !prev[i]);
+    if (turnedOn) {
+      userOverrodeDowngrade.value = true;
+      resetFpsCooldown();
+    }
+  },
+);
 </script>
 
 <template>
@@ -335,21 +433,14 @@ const toggleLyric = (): void => {
       <div
         v-show="isExpanded"
         class="fixed inset-0 z-200 bg-surface overflow-hidden text-cover"
-        :class="immersive ? 'cursor-none [&_*]:!cursor-none' : ''"
-        style="--lp-color: rgb(var(--s-cover))"
+        :class="[immersive ? 'cursor-none [&_*]:!cursor-none' : '', enhanceClass]"
+        :style="{ '--lp-color': 'rgb(var(--s-cover))', ...autoStyleVars, ...spectrumStyleVars }"
         @mouseenter="onPlayerMouseEnter"
         @mouseleave="onPlayerMouseLeave"
+        @mousemove="onMainMove"
       >
-        <!-- 背景 -->
+        <!-- 背景（含流体/模糊/纯色三种模式） -->
         <PlayerBackground />
-        <!-- 封面景深：铺满整屏的模糊封面副本，低频驱动模糊深度 -->
-        <CoverDepthOfField />
-        <!-- 流体背景 -->
-        <FluidBackground
-          v-if="settings.player.enableFluidBackground"
-          :dominant-color="dominant"
-          :palette="palette"
-        />
         <!-- 雪花背景层 -->
         <SnowBackground v-if="settings.player.enableSnowBackground" :palette="palette" />
         <!-- 雾气背景层 -->
@@ -366,7 +457,7 @@ const toggleLyric = (): void => {
         <!-- 底部频谱（环绕模式下隐藏，改由 AroundCoverSpectrum 接管） -->
         <BottomSpectrum
           v-if="isExpanded && settings.player.enableSpectrum && !isAroundSpectrum"
-          :show="isPlaying && immersive"
+          :show="isPlaying"
         />
         <!-- 顶/底栏渐变遮罩 -->
         <div
@@ -421,12 +512,21 @@ const toggleLyric = (): void => {
           </div>
         </div>
         <!-- 主区域 -->
-        <div class="absolute top-14 inset-x-0 bottom-20" @mousemove="onMainMove">
-          <!-- 左侧 -->
+        <div class="absolute top-14 inset-x-0 bottom-20">
+          <!-- 左侧（镜像时位于右侧） -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 w-[38%] flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :style="coverCentered ? 'transform: translateX(calc(100% * 11 / 18))' : undefined"
+            class="absolute inset-y-0 w-[38%] flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            :class="mirrorEffective ? 'right-0' : 'left-0'"
+            :style="
+              coverCentered
+                ? {
+                    transform: mirrorEffective
+                      ? 'translateX(calc(-100% * 31 / 38))'
+                      : 'translateX(calc(100% * 31 / 38))',
+                  }
+                : undefined
+            "
           >
             <!-- 封面 + 歌曲信息 -->
             <div class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
@@ -448,11 +548,12 @@ const toggleLyric = (): void => {
               </Transition>
             </div>
           </div>
-          <!-- 右侧 -->
+          <!-- 右侧（镜像时位于左侧） -->
           <div
-            class="group absolute inset-y-0 right-0 pr-12 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="group absolute inset-y-0 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               fullscreenCover ? 'w-1/2' : 'w-[62%]',
+              mirrorEffective ? 'left-0 pl-12' : 'right-0 pr-12',
               coverCentered || status.fullQueueOpen || commentPanelOpen
                 ? 'opacity-0 pointer-events-none'
                 : 'opacity-100',
@@ -505,6 +606,7 @@ const toggleLyric = (): void => {
                 :fan-min-opacity="settings.player.fanLyricsMinOpacity"
                 :fan-max-blur="settings.player.fanLyricsMaxBlur"
                 :fan-enable-background="settings.player.fanLyricsEnableBackground"
+                :fan-always-show-active-bg="settings.player.fanLyricsAlwaysShowActiveBg"
                 :fan-enable-glow="settings.player.fanLyricsEnableGlow"
                 :lyric-scroll-direction="settings.lyric.lyricScrollDirection"
                 @seek="player.seek($event)"
@@ -689,7 +791,7 @@ const toggleLyric = (): void => {
               </SButton>
             </div>
             <div class="flex items-center gap-2 w-full">
-              <span class="text-xs text-cover/50 tabular-nums min-w-9 text-center">
+              <span class="ce-control text-xs text-cover/50 tabular-nums min-w-9 text-center">
                 {{ formatTime(position) }}
               </span>
               <SSlider
@@ -702,7 +804,7 @@ const toggleLyric = (): void => {
                 class="flex-1"
                 @drag-end="onSeekDragEnd"
               />
-              <span class="text-xs text-cover/50 tabular-nums min-w-9 text-center">
+              <span class="ce-control text-xs text-cover/50 tabular-nums min-w-9 text-center">
                 {{ formatTime(duration) }}
               </span>
             </div>

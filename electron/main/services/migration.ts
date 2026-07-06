@@ -1,5 +1,5 @@
 /**
- * SPlayer-Next → Soto-Player Community 数据迁移
+ * SPlayer-Next → Soto Player-Community 数据迁移
  *
  * 项目改名后 app.getName() 改变，userData 路径随之变化：
  *   旧：C:\Users\<u>\AppData\Roaming\SPlayer-Next\app-data\
@@ -20,14 +20,31 @@ import { dataRoot } from "@main/utils/paths";
 const MIGRATE_SUBDIRS = ["config", "database", "cache", "plugins"] as const;
 
 /**
- * 计算旧 SPlayer-Next 的数据根目录
+ * 可能的旧 userData 目录名
  *
- * app.getPath("userData") 的新值是 .../soto-player-community，
- * 旧值是 .../SPlayer-Next，二者在父目录下并列
+ * 项目曾多次改名：SPlayer-Next / SPlayer / soto-player-community / soto-player 等，
+ * 兼容常见历史名称，按发现顺序返回第一个包含 settings.json 的旧数据根目录
+ */
+const LEGACY_DIR_CANDIDATES = [
+  "SPlayer-Next",
+  "soto-player-community",
+  "soto-player",
+  "SPlayer",
+  "soto-music",
+] as const;
+
+/**
+ * 计算旧数据根目录，自动探测多种历史目录名
+ * @returns 探测到的旧 app-data 路径；不存在时回退到 SPlayer-Next
  */
 const getLegacyDataRoot = (): string => {
   const currentUserData = app.getPath("userData");
   const parent = path.dirname(currentUserData);
+  for (const dir of LEGACY_DIR_CANDIDATES) {
+    const root = path.join(parent, dir, "app-data");
+    const settingsPath = path.join(root, "config", "settings.json");
+    if (existsSync(settingsPath)) return root;
+  }
   return path.join(parent, "SPlayer-Next", "app-data");
 };
 

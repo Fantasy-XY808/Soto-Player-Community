@@ -1,5 +1,5 @@
 /**
- * SPlayer-Next → Soto-Player Community 数据迁移 API
+ * SPlayer-Next → Soto Player-Community 数据迁移 API
  */
 
 /** 迁移结果 */

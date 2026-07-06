@@ -144,6 +144,8 @@ export interface PlayerSettings {
   playerBgType: PlayerBgType;
   /** 全屏播放器封面布局 */
   coverLayout: CoverLayout;
+  /** 镜像布局：左右翻转封面与歌词位置（居中状态强制不生效） */
+  mirrorLayout: boolean;
   /** 无歌词时自动居中封面并隐藏歌词区域 */
   autoCenterCover: boolean;
   /** 纯音乐时展示热评（与 autoCenterCover 互斥；二者均开启时热评优先） */
@@ -184,6 +186,8 @@ export interface PlayerSettings {
   fanLyricsMaxBlur: number;
   /** 扇形歌词是否启用底框背景 */
   fanLyricsEnableBackground: boolean;
+  /** 扇形歌词激活行是否始终显示底框（依赖 fanLyricsEnableBackground） */
+  fanLyricsAlwaysShowActiveBg: boolean;
   /** 扇形歌词是否启长音节光辉 */
   fanLyricsEnableGlow: boolean;
   /** 频谱灵敏度（增益倍数） */
@@ -194,6 +198,20 @@ export interface PlayerSettings {
   spectrumSmoothing: number;
   /** 频谱样式:bar 矩形柱 / curve Catmull-Rom 平滑曲线 / around 环绕封面径向 */
   spectrumStyle: "bar" | "curve" | "around";
+  /** 频谱心跳：低频驱动整体等比放大（BetterLyrics 风格） */
+  spectrumBreathing: boolean;
+  /** 频谱心跳强度（0~100，控制最大放大倍率，100 时最大 1.8x） */
+  spectrumBreathingIntensity: number;
+  /** 频谱亮度固定值(0.3~1.0),智能模式开启时在此基础上叠加调暗 */
+  spectrumBrightness: number;
+  /** 频谱智能调暗:鼠标悬浮播放界面控件时自动降低亮度和饱和度以突出控件 */
+  spectrumSmartDim: boolean;
+  /** FFT 等响度补偿(BetterLyrics 风格:20Hz gain=1.0 → 20kHz gain=12.0 对数插值,强化高频视觉) */
+  fftEqualLoudness: boolean;
+  /** 频谱颜色模式:cover 跟随封面色 / custom 自定义颜色 */
+  spectrumColorMode: "cover" | "custom";
+  /** 频谱自定义颜色(hex),仅 spectrumColorMode=custom 时生效 */
+  spectrumCustomColor: string;
   /** 是否启用雪花背景层 */
   enableSnowBackground: boolean;
   /** 是否启用雾气背景层 */
@@ -210,7 +228,38 @@ export interface PlayerSettings {
   playerBgRenderScale: number;
   /** 流体背景：启用节拍联动 */
   playerBgBeat: boolean;
+  /** 流体背景：预设风格 */
+  playerBgPreset: "soft" | "vivid" | "intense" | "custom";
+  /** 流体背景：亮度（CSS filter brightness） */
+  playerBgBrightness: number;
+  /** 流体背景：饱和度（CSS filter saturate） */
+  playerBgSaturation: number;
+  /** 流体背景：对比度（CSS filter contrast） */
+  playerBgContrast: number;
+  /** 特效自动降级：连续低帧率时自动关闭流体/雾气背景与封面景深，保持播放流畅 */
+  enableEffectAutoDowngrade: boolean;
+  /**
+   * 播放界面控件可见性增强模式
+   * - none: 不增强（默认）
+   * - background: 控件背景（blur/acrylic/mica，依赖沉浸模式开启）
+   * - outline: 描边（thin/shadow）
+   * - auto: 智能推演（根据下层颜色实时计算对比色）
+   */
+  controlEnhanceMode: ControlEnhanceMode;
+  /** 控件背景风格（仅 controlEnhanceMode=background 生效） */
+  controlBackgroundStyle: ControlBackgroundStyle;
+  /** 控件描边风格（仅 controlEnhanceMode=outline 生效） */
+  controlOutlineStyle: ControlOutlineStyle;
 }
+
+/** 控件可见性增强模式 */
+export type ControlEnhanceMode = "none" | "background" | "outline" | "auto";
+
+/** 控件背景风格 */
+export type ControlBackgroundStyle = "blur" | "acrylic" | "mica";
+
+/** 控件描边风格 */
+export type ControlOutlineStyle = "thin" | "shadow" | "glow";
 
 /** 外观设置 */
 export interface AppearanceSettings {
@@ -232,8 +281,12 @@ export interface AppearanceSettings {
   fontFamily: string;
   /** 性能监视器悬浮卡片 */
   showPerformanceMonitor: boolean;
-  /** 全屏播放器封面景深（背景虚化） */
-  coverDepthOfField: boolean;
+  /** 背景图片视差（仅 coverLayout=fullscreen 时生效） */
+  coverParallax: boolean;
+  /** 视差强度（0~100，控制背景放大与视差幅度） */
+  coverParallaxIntensity: number;
+  /** 视差模式：plane=平面平移 / multi=多维透视倾斜（实验性） */
+  coverParallaxMode: "plane" | "multi";
   /** 工具栏默认值迁移标记（一次性回退 showQualitySwitch 到 true，避免旧版本持久化 false） */
   _toolbarDefaultsV2?: boolean;
 }

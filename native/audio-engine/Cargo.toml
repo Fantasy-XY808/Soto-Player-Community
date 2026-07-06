@@ -35,6 +35,20 @@ tracing-appender = "0.2"
 time = { version = "0.3", features = ["macros", "formatting"] }
 walkdir = "2"
 tokio = { version = "1", features = ["rt"] }
+# unlock-music 解密：NCM/QMC/KGM/KWM/MFLAC/TM
+aes = "0.8"
+cbc = "0.1"
+ecb = "0.1"
+cipher = { version = "0.4", features = ["block-padding"] }
+md-5 = "0.10"
+hex = "0.4"
+# 神经网络上采样（框架就绪 + 算法兜底）
+# ort: ONNX Runtime 推理框架，运行时找不到模型自动回退 rubato sinc
+# ndarray: ort 输入输出张量容器
+# rubato: 高质量 sinc 上采样算法兜底
+ort = { version = "2.0.0-rc.12", default-features = false }
+ndarray = "0.15"
+rubato = "0.15"
 
 [build-dependencies]
 napi-build = "2.3"

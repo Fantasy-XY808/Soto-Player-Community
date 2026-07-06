@@ -1,6 +1,7 @@
 use parking_lot::Mutex;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 /// 每次 FFT 的样本数
 const FFT_SIZE: usize = 2048;
@@ -13,6 +14,58 @@ const MIN_FREQ: f32 = 80.0;
 const MAX_FREQ: f32 = 16000.0;
 /// 环形缓冲区最大样本数
 const MAX_BUFFER_SIZE: usize = 8192;
+
+/// 等响度补偿曲线锚点：20Hz 处增益 1.0（基准），20kHz 处增益 12.0（高频补偿峰值）
+/// 中间频率在对数域上线性插值，模拟 BetterLyrics 的视觉强化曲线
+const LOUDNESS_GAIN_LOW: f32 = 1.0;
+const LOUDNESS_GAIN_HIGH: f32 = 12.0;
+const LOUDNESS_FREQ_LOW: f32 = 20.0;
+const LOUDNESS_FREQ_HIGH: f32 = 20000.0;
+
+/// 全局等响度补偿开关，默认开启
+static EQUAL_LOUDNESS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// 预计算的等响度补偿增益表，按 OUTPUT_BINS 索引
+static LOUDNESS_GAINS: OnceLock<Vec<f32>> = OnceLock::new();
+
+/// 构建等响度补偿增益表，按 bin 中心频率对数插值
+fn build_loudness_gains() -> Vec<f32> {
+    let log_min = MIN_FREQ.ln();
+    let log_max = MAX_FREQ.ln();
+    let log_lo = LOUDNESS_FREQ_LOW.ln();
+    let log_hi = LOUDNESS_FREQ_HIGH.ln();
+    (0..OUTPUT_BINS)
+        .map(|i| {
+            let t = (i as f32 + 0.5) / OUTPUT_BINS as f32;
+            let freq = (log_min + (log_max - log_min) * t).exp();
+            if freq <= LOUDNESS_FREQ_LOW {
+                LOUDNESS_GAIN_LOW
+            } else if freq >= LOUDNESS_FREQ_HIGH {
+                LOUDNESS_GAIN_HIGH
+            } else {
+                let ratio = (freq.ln() - log_lo) / (log_hi - log_lo);
+                LOUDNESS_GAIN_LOW + (LOUDNESS_GAIN_HIGH - LOUDNESS_GAIN_LOW) * ratio
+            }
+        })
+        .collect()
+}
+
+/// 取等响度补偿增益表（首次调用时构建，后续零开销）
+fn loudness_gains() -> &'static [f32] {
+    LOUDNESS_GAINS
+        .get_or_init(build_loudness_gains)
+        .as_slice()
+}
+
+/// 设置等响度补偿开关（前端按用户偏好下发，默认开启）
+pub fn set_equal_loudness_enabled(enabled: bool) {
+    EQUAL_LOUDNESS_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+/// 取等响度补偿开关状态
+pub fn is_equal_loudness_enabled() -> bool {
+    EQUAL_LOUDNESS_ENABLED.load(Ordering::Relaxed)
+}
 
 /// FFT 频谱分析器，接收单声道样本并输出频谱数据
 pub struct FftAnalyzer {
@@ -99,6 +152,13 @@ impl FftAnalyzer {
         let log_min = MIN_FREQ.ln();
         let log_max = MAX_FREQ.ln();
 
+        // 等响度补偿表只在开启时取，关闭时返回空切片跳过乘法
+        let gains = if is_equal_loudness_enabled() {
+            loudness_gains()
+        } else {
+            &[]
+        };
+
         for i in 0..OUTPUT_BINS {
             let freq_lo = (log_min + (log_max - log_min) * i as f32 / OUTPUT_BINS as f32).exp();
             let freq_hi =
@@ -119,8 +179,16 @@ impl FftAnalyzer {
             }
             let avg = sum / (bin_hi - bin_lo) as f32;
 
+            // 等响度补偿：按 bin 中心频率乘增益（BetterLyrics 风格）
+            // 在 dB 转换前应用，避免归一化后乘 12 直接 clip 到 1.0 失去动态范围
+            let compensated = if !gains.is_empty() {
+                avg * gains[i]
+            } else {
+                avg
+            };
+
             // 转为 dB 并归一化到 [0, 1]
-            let db = 20.0 * (avg + 1e-10).log10();
+            let db = 20.0 * (compensated + 1e-10).log10();
             work.output[i] = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
         }
 

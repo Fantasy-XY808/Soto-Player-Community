@@ -80,18 +80,20 @@ const toComment = (raw: any): NeteaseComment => ({
 
 /**
  * 拉取歌曲评论
+ *
+ * 直接调用 v1 端点 `/api/v1/resource/comments/R_SO_4_<id>`（threadId 拼在 URL 路径里）
+ * 仅用 offset + limit 翻页；hotComments 仅在首屏返回，更多热评请用 fetchHotComments
  * @param songId 歌曲 id
- * @param opts 分页参数
+ * @param opts 分页参数（offset / limit；不传 before 以避免与服务端 offset 语义冲突）
  */
 export const fetchSongComments = async (
   songId: string | number,
-  opts: { offset?: number; limit?: number; before?: number } = {},
+  opts: { offset?: number; limit?: number } = {},
 ): Promise<NeteaseSongComments> => {
-  const body = await neteaseApi.comment_music({
+  const body: any = await neteaseApi.comment_music({
     id: songId,
     offset: opts.offset,
     limit: opts.limit,
-    before: opts.before,
   });
   return {
     total: body?.total ?? 0,
@@ -99,6 +101,29 @@ export const fetchSongComments = async (
     comments: (body?.comments ?? []).map(toComment),
     hasMore: !!body?.hasMore,
     moreHot: !!body?.moreHot,
+  };
+};
+
+/**
+ * 单独分页拉取热评
+ *
+ * 热评只在首屏 comment_music 响应里返回，更多热评需用 `before` 游标翻页：
+ * 服务端按 hotComments 末尾 time 字段为游标返回更早的热评
+ * @param songId 歌曲 id
+ * @param opts 分页参数：limit + before（上一页最后一条热评的 time）
+ */
+export const fetchHotComments = async (
+  songId: string | number,
+  opts: { limit?: number; before?: number } = {},
+): Promise<{ hotComments: NeteaseComment[]; hasMore: boolean }> => {
+  const body: any = await neteaseApi.comment_music({
+    id: songId,
+    limit: opts.limit,
+    before: opts.before,
+  });
+  return {
+    hotComments: (body?.hotComments ?? []).map(toComment),
+    hasMore: !!body?.moreHot,
   };
 };
 
@@ -162,6 +187,9 @@ const parseErrorCode = (err: unknown): number => {
 
 /**
  * 发送评论
+ *
+ * 业务码：405 验证码 / 250 敏感词 / 404 无权限 / 301 鉴权失败
+ * comment_add 模块默认 threadId=`R_SO_4_<id>`，对应歌曲资源；replyCommentId 形成楼层关联
  * @param songId 歌曲 id
  * @param content 评论内容
  * @param replyCommentId 回复某条评论时传其 id
@@ -173,11 +201,7 @@ export const sendSongComment = async (
   replyCommentId?: number,
 ): Promise<void> => {
   try {
-    await neteaseApi.comment_add({
-      id: songId,
-      content,
-      replyCommentId,
-    });
+    await neteaseApi.comment_add({ id: songId, content, replyCommentId });
   } catch (err) {
     throw new NeteaseCommentAddError(
       parseErrorCode(err),

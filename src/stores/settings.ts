@@ -14,6 +14,35 @@ import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
 
+export const FLUID_BG_PRESETS = {
+  soft: {
+    playerBgFlowSpeed: 1,
+    playerBgRenderScale: 0.5,
+    playerBgBeat: false,
+    playerBgBrightness: 1.0,
+    playerBgSaturation: 1.0,
+    playerBgContrast: 1.0,
+  },
+  vivid: {
+    playerBgFlowSpeed: 2,
+    playerBgRenderScale: 0.5,
+    playerBgBeat: false,
+    playerBgBrightness: 1.2,
+    playerBgSaturation: 1.1,
+    playerBgContrast: 1.0,
+  },
+  intense: {
+    playerBgFlowSpeed: 4,
+    playerBgRenderScale: 0.5,
+    playerBgBeat: false,
+    playerBgBrightness: 1.5,
+    playerBgSaturation: 1.3,
+    playerBgContrast: 1.1,
+  },
+} as const;
+
+export type FluidBgPreset = keyof typeof FLUID_BG_PRESETS;
+
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
  * 末尾补上完整集合里缺失的新项，剔除已失效的项
@@ -45,20 +74,23 @@ export const useSettingsStore = defineStore(
       rememberCloseChoice: false,
       fontFamily: "",
       showPerformanceMonitor: false,
-      coverDepthOfField: true,
+      coverParallax: true,
+      coverParallaxIntensity: 60,
+      coverParallaxMode: "plane",
     });
 
     /** 播放器 */
     const player = reactive<PlayerSettings>({
       playerBgType: "blur",
       coverLayout: "default",
+      mirrorLayout: false,
       autoCenterCover: true,
-      showPureMusicComment: true,
+      showPureMusicComment: false,
       followCoverColor: true,
       autoImmersive: true,
       outputDevice: null,
       pauseOnDeviceSwitch: false,
-      enableSpectrum: false,
+      enableSpectrum: true,
       spectrumBarWidth: 4,
       songLevel: "hq",
       enableFluidBackground: true,
@@ -67,24 +99,40 @@ export const useSettingsStore = defineStore(
       enableFanLyrics: false,
       fanLyricsAngle: 60,
       fanLyricsMaxLines: 7,
-      fanLyricsLineHeight: 96,
+      fanLyricsLineHeight: 56,
       fanLyricsMinScale: 0.78,
       fanLyricsMinOpacity: 0,
       fanLyricsMaxBlur: 7,
       fanLyricsEnableBackground: true,
+      fanLyricsAlwaysShowActiveBg: false,
       fanLyricsEnableGlow: true,
       spectrumSensitivity: 1.0,
       spectrumMaxHeight: 5.0,
       spectrumSmoothing: 0.5,
       spectrumStyle: "bar",
+      spectrumBreathing: false,
+      spectrumBreathingIntensity: 80,
+      spectrumBrightness: 1.0,
+      spectrumSmartDim: false,
+      fftEqualLoudness: true,
+      spectrumColorMode: "cover",
+      spectrumCustomColor: "#FFFFFF",
       enableSnowBackground: false,
       enableFogBackground: false,
       enableRaindropBackground: false,
-      playerBgFreezeOnPause: true,
+      playerBgFreezeOnPause: false,
       playerBgFps: 30,
       playerBgFlowSpeed: 2,
       playerBgRenderScale: 0.5,
       playerBgBeat: false,
+      playerBgPreset: "vivid",
+      playerBgBrightness: 1.2,
+      playerBgSaturation: 1.1,
+      playerBgContrast: 1.0,
+      enableEffectAutoDowngrade: true,
+      controlEnhanceMode: "none",
+      controlBackgroundStyle: "blur",
+      controlOutlineStyle: "thin",
     });
 
     /** 歌词 */
@@ -247,6 +295,26 @@ export const useSettingsStore = defineStore(
         lyric.springDamping = params.damping;
         lyric.springStiffness = params.stiffness;
       }
+      if (path === "player.playerBgPreset" && value !== "custom") {
+        const preset = FLUID_BG_PRESETS[value as FluidBgPreset];
+        if (preset) {
+          player.playerBgFlowSpeed = preset.playerBgFlowSpeed;
+          player.playerBgRenderScale = preset.playerBgRenderScale;
+          player.playerBgBeat = preset.playerBgBeat;
+          player.playerBgBrightness = preset.playerBgBrightness;
+          player.playerBgSaturation = preset.playerBgSaturation;
+          player.playerBgContrast = preset.playerBgContrast;
+        }
+      }
+      if (
+        path.startsWith("player.playerBg") &&
+        path !== "player.playerBgPreset" &&
+        path !== "player.playerBgFps" &&
+        path !== "player.playerBgFreezeOnPause" &&
+        player.playerBgPreset !== "custom"
+      ) {
+        player.playerBgPreset = "custom";
+      }
     };
 
     return {
@@ -266,6 +334,7 @@ export const useSettingsStore = defineStore(
   {
     persist: {
       storage: localStorage,
+      key: "soto-player:settings",
       omit: ["system"],
       afterHydrate: ({ store }) => {
         const { lyric } = store as unknown as { lyric: LyricSettings };
@@ -280,6 +349,84 @@ export const useSettingsStore = defineStore(
           appearance._toolbarDefaultsV2 = true;
         } else if (typeof appearance.showQualitySwitch !== "boolean") {
           appearance.showQualitySwitch = true;
+        }
+        // 播放器默认值一次性迁移：原版 SPlayer-Next 用同一 localStorage origin（file://），
+        // 其持久化的 enableSpectrum:false / autoCenterCover:false 等旧值会覆盖新默认值，
+        // 导致频谱不显示、封面不居中等"功能瘫痪"。用 _playerDefaultsV2 标记位一次性回退
+        const { player } = store as unknown as { player: PlayerSettings };
+        if (!(player as unknown as { _playerDefaultsV2?: boolean })._playerDefaultsV2) {
+          player.enableSpectrum = true;
+          player.autoCenterCover = true;
+          player.followCoverColor = true;
+          player.enableFluidBackground = true;
+          player.enableCoverBreathing = true;
+          player.enableParallaxTilt = true;
+          // showPureMusicComment 与 autoCenterCover 互斥：热评开启时封面不居中。
+          // 用户期望纯音乐时封面居中，故默认关闭热评；用户可手动重新开启
+          player.showPureMusicComment = false;
+          (player as unknown as { _playerDefaultsV2?: boolean })._playerDefaultsV2 = true;
+        }
+        // 视差字段迁移：旧版本是 coverDepthOfField / coverDepthIntensity / coverDepthMouseFollow
+        // 新版本改为 coverParallax / coverParallaxIntensity / coverParallaxMode
+        if (typeof appearance.coverParallax !== "boolean") {
+          // 旧字段存在则沿用其开关值，否则默认 true
+          const oldFlag = (appearance as unknown as { coverDepthOfField?: boolean }).coverDepthOfField;
+          appearance.coverParallax = oldFlag ?? true;
+        }
+        if (typeof appearance.coverParallaxIntensity !== "number") {
+          const oldIntensity = (appearance as unknown as { coverDepthIntensity?: number }).coverDepthIntensity;
+          appearance.coverParallaxIntensity = oldIntensity ?? 60;
+        }
+        if (appearance.coverParallaxMode !== "plane" && appearance.coverParallaxMode !== "multi") {
+          appearance.coverParallaxMode = "plane";
+        }
+        // 清理旧字段
+        delete (appearance as unknown as { coverDepthOfField?: boolean }).coverDepthOfField;
+        delete (appearance as unknown as { coverDepthIntensity?: number }).coverDepthIntensity;
+        delete (appearance as unknown as { coverDepthMouseFollow?: boolean }).coverDepthMouseFollow;
+
+        // 频谱参数合法性校验：原版污染可能导致 spectrumSensitivity=0、
+        // spectrumMaxHeight=0、spectrumStyle 为非法值等，使频谱条不可见。
+        // 每次启动都校验，不依赖一次性标记位（用户手动改到非法值也能恢复）
+        if (typeof player.spectrumSensitivity !== "number" || player.spectrumSensitivity <= 0) {
+          player.spectrumSensitivity = 1.0;
+        }
+        if (typeof player.spectrumMaxHeight !== "number" || player.spectrumMaxHeight < 0.3) {
+          player.spectrumMaxHeight = 5.0;
+        }
+        if (typeof player.spectrumSmoothing !== "number" || player.spectrumSmoothing < 0) {
+          player.spectrumSmoothing = 0.5;
+        }
+        if (typeof player.spectrumBarWidth !== "number" || player.spectrumBarWidth < 1) {
+          player.spectrumBarWidth = 4;
+        }
+        if (
+          player.spectrumStyle !== "bar" &&
+          player.spectrumStyle !== "curve" &&
+          player.spectrumStyle !== "around"
+        ) {
+          player.spectrumStyle = "bar";
+        }
+        if (
+          typeof player.spectrumBrightness !== "number" ||
+          player.spectrumBrightness < 0.3 ||
+          player.spectrumBrightness > 1
+        ) {
+          player.spectrumBrightness = 1.0;
+        }
+        if (typeof player.spectrumSmartDim !== "boolean") {
+          player.spectrumSmartDim = false;
+        }
+        if (player.spectrumColorMode !== "cover" && player.spectrumColorMode !== "custom") {
+          player.spectrumColorMode = "cover";
+        }
+        if (typeof player.spectrumCustomColor !== "string" || !player.spectrumCustomColor) {
+          player.spectrumCustomColor = "#FFFFFF";
+        }
+        // fanLyricsLineHeight 旧默认 96 偏大（7行需 728px），新默认 56。
+        // 仅迁移恰好等于旧默认值的情形，用户手动调过的非 96 值保留
+        if (player.fanLyricsLineHeight === 96) {
+          player.fanLyricsLineHeight = 56;
         }
       },
     },

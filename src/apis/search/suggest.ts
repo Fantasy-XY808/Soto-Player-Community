@@ -1,7 +1,7 @@
 /**
  * 搜索建议
  * 改用 cloudsearch API 替代 search_suggest，因为前者返回完整数据（含封面 URL）
- * 4 种类型并行调用，limit=3 控制延迟
+ * 多种类型并行调用，limit=3 控制延迟
  */
 
 import { netease as neteaseApi } from "@/apis/netease";
@@ -25,11 +25,22 @@ export interface SuggestSimpleItem {
   cover?: string;
 }
 
+export interface SearchMvItem {
+  id: number;
+  name: string;
+  /** 多个歌手用 " / " 连接 */
+  artist?: string;
+  /** MV 封面 URL */
+  cover?: string;
+  duration?: number;
+}
+
 export interface SuggestData {
   songs: SuggestSongItem[];
   albums: SuggestSimpleItem[];
   artists: SuggestSimpleItem[];
   playlists: SuggestSimpleItem[];
+  mvs: SearchMvItem[];
 }
 
 interface NeteaseSong {
@@ -56,6 +67,15 @@ interface NeteasePlaylist {
   coverImgUrl?: string;
   creator?: { nickname: string };
 }
+interface NeteaseMv {
+  id: number;
+  name: string;
+  artistName?: string;
+  artists?: Array<{ name: string }>;
+  cover?: string;
+  imgurl?: string;
+  duration?: number;
+}
 
 interface CloudSearchBody<T> {
   result?: T & {
@@ -63,17 +83,18 @@ interface CloudSearchBody<T> {
     albumCount?: number;
     artistCount?: number;
     playlistCount?: number;
+    mvCount?: number;
   };
 }
 
-const EMPTY: SuggestData = { songs: [], albums: [], artists: [], playlists: [] };
+const EMPTY: SuggestData = { songs: [], albums: [], artists: [], playlists: [], mvs: [] };
 
 /** 每种类型取前 3 条，控制延迟 */
 const SUGGEST_LIMIT = 3;
 
 /**
  * 取网易云搜索建议（含封面）
- * 并行调用 cloudsearch 4 种类型，任一失败不影响其他
+ * 并行调用 cloudsearch 5 种类型，任一失败不影响其他
  * @param keyword - 关键词
  * @returns 分类建议；keyword 空 / 接口失败时返回空集
  */
@@ -83,7 +104,7 @@ export const getSearchSuggest = async (keyword: string): Promise<SuggestData> =>
 
   const params = { keywords: word, offset: 0, limit: SUGGEST_LIMIT };
 
-  const [songsBody, albumsBody, artistsBody, playlistsBody] = await Promise.all([
+  const [songsBody, albumsBody, artistsBody, playlistsBody, mvsBody] = await Promise.all([
     neteaseApi
       .cloudsearch({ ...params, type: 1 })
       .then((b: CloudSearchBody<{ songs?: NeteaseSong[] }>) => b?.result?.songs ?? [])
@@ -100,6 +121,10 @@ export const getSearchSuggest = async (keyword: string): Promise<SuggestData> =>
       .cloudsearch({ ...params, type: 1000 })
       .then((b: CloudSearchBody<{ playlists?: NeteasePlaylist[] }>) => b?.result?.playlists ?? [])
       .catch(() => [] as NeteasePlaylist[]),
+    neteaseApi
+      .cloudsearch({ ...params, type: 1004 })
+      .then((b: CloudSearchBody<{ mvs?: NeteaseMv[] }>) => b?.result?.mvs ?? [])
+      .catch(() => [] as NeteaseMv[]),
   ]);
 
   return {
@@ -129,6 +154,13 @@ export const getSearchSuggest = async (keyword: string): Promise<SuggestData> =>
       name: playlist.name,
       subtitle: playlist.creator?.nickname,
       cover: withPicSize(playlist.coverImgUrl),
+    })),
+    mvs: mvsBody.map((mv) => ({
+      id: mv.id,
+      name: mv.name,
+      artist: mv.artistName ?? (mv.artists ?? []).map((a) => a.name).filter(Boolean).join(" / "),
+      cover: withPicSize(mv.cover ?? mv.imgurl),
+      duration: mv.duration,
     })),
   };
 };

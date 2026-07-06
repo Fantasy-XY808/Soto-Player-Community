@@ -25,3 +25,31 @@ export interface UserSubcount {
   /** 收藏歌手数 */
   artistCount: number;
 }
+
+/** QQ 音乐用户歌单条目 */
+export interface QqPlaylist {
+  /** 歌单 disstid */
+  id: string;
+  /** 歌单名 */
+  name: string;
+  /** 封面 URL */
+  cover?: string;
+  /** 曲目数 */
+  trackCount?: number;
+  /** 创建者昵称 */
+  owner?: string;
+}
+
+/** 酷狗用户歌单条目 */
+export interface KugouPlaylist {
+  /** 歌单 specialid */
+  id: string;
+  /** 歌单名 */
+  name: string;
+  /** 封面 URL */
+  cover?: string;
+  /** 曲目数 */
+  trackCount?: number;
+  /** 创建者昵称 */
+  owner?: string;
+}

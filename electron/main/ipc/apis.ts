@@ -1,13 +1,21 @@
 /**
  * 音源 API 统一 IPC
  *
- * 只注册两个通道：
- * - apis:call(platform, name, params)   调用对应平台的任意接口
- * - apis:clearSession(platform)         清空某平台登录态
+ * 注册通道：
+ * - apis:call(platform, name, params)        调用对应平台的任意接口
+ * - apis:clearSession(platform)              清空某平台登录态
+ * - apis:invalidateCache(platform, name)    按接口名清空指定平台内存缓存
+ * - apis:openLoginWeb(platform)              打开官方网页登录窗口
+ * - apis:setCookie(platform, cookie)        手动写入 cookie 登录
  */
 
 import { ipcMain } from "electron";
-import { callNetease, clearNeteaseCookies, mergeNeteaseCookies } from "@main/apis/netease";
+import {
+  callNetease,
+  clearNeteaseCookies,
+  invalidateNeteaseCache,
+  mergeNeteaseCookies,
+} from "@main/apis/netease";
 import { cookieToJson } from "@main/apis/netease/core/cookie";
 import { callQQMusic } from "@main/apis/qqmusic";
 import { callKugou } from "@main/apis/kugou";
@@ -55,6 +63,11 @@ export const registerApisIpc = (): void => {
 
   ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) => {
     if (platform === "netease") clearNeteaseCookies();
+  });
+
+  // 按接口名清除 netease 内存缓存：发送 / 删除评论后让 comment_music 立即失效
+  ipcMain.handle("apis:invalidateCache", (_evt, platform: ApiPlatform, name: string) => {
+    if (platform === "netease") invalidateNeteaseCache(name);
   });
 
   // 打开 NCM 官方网页登录，成功后把 cookies 合并写入 session

@@ -1,4 +1,5 @@
 import { netease as neteaseApi } from "@/apis/netease";
+import { LruCache } from "@/services/lruCache";
 
 /** 单条动态 */
 export interface EventItem {
@@ -10,7 +11,24 @@ export interface EventItem {
   userId: string;
   userName: string;
   userAvatar: string;
+  /** 点赞数 */
+  likeCount?: number;
+  /** 评论数 */
+  commentCount?: number;
 }
+
+/** 最近动态缓存：供 EventDetail 跳转时按 id 查找，避免重复请求 */
+const recentEventsCache = new LruCache<string, EventItem>({ capacity: 100 });
+
+/** 写入最近动态缓存（按 id 去重，超容量时自动淘汰最久未访问） */
+export const cacheRecentEvents = (items: EventItem[]): void => {
+  for (const item of items) {
+    recentEventsCache.set(item.id, item);
+  }
+};
+
+/** 按 id 取最近动态缓存 */
+export const getCachedEvent = (id: string): EventItem | undefined => recentEventsCache.get(id);
 
 /** 动态列表响应 */
 export interface EventListResult {
@@ -29,6 +47,11 @@ interface RawEvent {
     userId?: number;
     nickname?: string;
     avatarUrl?: string;
+  };
+  info?: {
+    likedCount?: number;
+    commentCount?: number;
+    commentThreadIds?: { id?: string };
   };
 }
 
@@ -55,6 +78,8 @@ const toEventItem = (raw: RawEvent): EventItem => {
     userId,
     userName,
     userAvatar,
+    likeCount: raw.info?.likedCount,
+    commentCount: raw.info?.commentCount,
   };
 };
 
@@ -69,8 +94,10 @@ export const fetchEvents = async (lasttime = -1, pagesize = 20): Promise<EventLi
     lasttime?: number;
     more?: boolean;
   }>({ lasttime, pagesize });
+  const events = (body?.event ?? []).map(toEventItem);
+  cacheRecentEvents(events);
   return {
-    events: (body?.event ?? []).map(toEventItem),
+    events,
     lasttime: body?.lasttime ?? -1,
     more: body?.more ?? false,
   };

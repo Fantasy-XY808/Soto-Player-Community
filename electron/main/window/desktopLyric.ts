@@ -175,7 +175,7 @@ export const createDesktopLyricWindow = (): BrowserWindow => {
     minWidth: MIN_WIDTH,
     minHeight: initialHeight,
     maxHeight: initialHeight,
-    title: "Soto-Player Community - Desktop Lyric",
+    title: "Soto Player-Community - Desktop Lyric",
     frame: false,
     transparent: true,
     hasShadow: false,

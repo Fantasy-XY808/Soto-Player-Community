@@ -176,8 +176,11 @@ onMounted(() => {
       <p class="text-sm text-on-surface-variant/60 mt-1">{{ t("musicReport.subtitle") }}</p>
     </div>
 
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <IconLucideLoader2 class="size-8 animate-spin text-on-surface-variant/40" />
+    <!-- 加载中：骨架屏占位，模拟 Hero + 卡片布局 -->
+    <div v-if="loading" class="flex-1 px-6 pb-8 space-y-5">
+      <SSkeleton class="h-40 rounded-2xl" />
+      <SSkeleton class="h-32 rounded-2xl" />
+      <SSkeleton class="h-44 rounded-2xl" />
     </div>
 
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center">
@@ -399,7 +402,15 @@ onMounted(() => {
                     : 'bg-on-surface-variant/15 text-on-surface-variant'
                 "
               >
-                {{ artistInitial(artist.name) }}
+                <img
+                  v-if="artist.avatar"
+                  :src="artist.avatar"
+                  :alt="artist.name"
+                  class="size-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <template v-else>{{ artistInitial(artist.name) }}</template>
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between mb-1">

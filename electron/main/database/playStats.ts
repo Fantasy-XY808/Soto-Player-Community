@@ -4,6 +4,7 @@
 
 import { getDb, isDbOpen } from "./index";
 import { libraryLog } from "@main/utils/logger";
+import { fetchArtistAvatar } from "@main/apis/musicbrainz";
 import type { Track } from "@shared/types/player";
 import type {
   PlayEventInput,
@@ -184,8 +185,11 @@ export const getTopTracks = (limit: number): TopTrack[] => {
  * track_json 里的 Track.artists 是数组,SQLite 无法直接 GROUP BY 数组元素,
  * 在 JS 侧聚合：拉全部行 → 解析 → 按主艺人聚合 → 排序截断。
  * 数据量评估：play_history 单用户 ~万级行,JSON.parse + Map 聚合 < 50ms。
+ *
+ * 头像来源：优先取 track_json 中保存的 artist.picUrl/avatar；缺失时对 top N
+ * 调 musicbrainz 异步预取，缓存到 {userData}/app-data/cache/artists/。
  */
-export const getTopArtists = (limit: number): TopArtist[] => {
+export const getTopArtists = async (limit: number): Promise<TopArtist[]> => {
   try {
     const rows = getDb()
       .prepare(
@@ -197,23 +201,42 @@ export const getTopArtists = (limit: number): TopArtist[] => {
       )
       .all() as { track_json: string; plays: number; ms: number }[];
 
-    const acc = new Map<string, { playCount: number; listenedMs: number }>();
+    const acc = new Map<
+      string,
+      { playCount: number; listenedMs: number; avatar?: string }
+    >();
     for (const row of rows) {
       try {
         const track = JSON.parse(row.track_json) as Track;
-        const name = track.artists?.[0]?.name?.trim() || "未知艺人";
+        const primary = track.artists?.[0];
+        const name = primary?.name?.trim() || "未知艺人";
         const cur = acc.get(name) ?? { playCount: 0, listenedMs: 0 };
         cur.playCount += row.plays;
         cur.listenedMs += row.ms;
+        // 艺人自带头像字段（流媒体 / 网易云等可能填入），保留首个非空值
+        if (!cur.avatar && primary?.avatar) {
+          cur.avatar = primary.avatar;
+        }
         acc.set(name, cur);
       } catch {
         // 损坏行跳过
       }
     }
-    return Array.from(acc.entries())
+    const sorted = Array.from(acc.entries())
       .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.playCount - a.playCount || b.listenedMs - a.listenedMs)
       .slice(0, limit);
+    // 仅对缺头像的 top 艺人调 musicbrainz 拉取（每条 ~500ms，串行避免触发限流）
+    for (const artist of sorted) {
+      if (artist.avatar) continue;
+      try {
+        const avatar = await fetchArtistAvatar(artist.name);
+        if (avatar) artist.avatar = avatar;
+      } catch (error) {
+        libraryLog.warn("拉取艺人头像失败:", artist.name, error);
+      }
+    }
+    return sorted;
   } catch (error) {
     libraryLog.error("读取最常艺人失败:", error);
     return [];

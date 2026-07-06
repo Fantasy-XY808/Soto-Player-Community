@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { dialog, ipcMain } from "electron";
 import { store } from "@main/store";
 import type { ConfigPath } from "@main/store/types";
+import type { ProxySettings } from "@shared/types/settings";
 import { systemLog } from "@main/utils/logger";
 import {
   enable as enableMedia,
@@ -15,7 +16,15 @@ import {
   setEqualizerBands,
   setPreampGain,
   setAudioSuperResolution,
+  setBassEnhancer,
+  setStereoWidener,
+  setLoudnessNormalizer,
+  setNeuralUpsample,
+  loadNeuralModel,
+  setProxy,
+  getPlayer,
 } from "@main/services/engine";
+import { syncPreventSleep } from "@main/services/preventSleep";
 import {
   setTaskbarProgress,
   applyMainWindowZoom,
@@ -26,6 +35,8 @@ import {
   applyDynamicIslandHorizontalOffset,
   applyDynamicIslandNotchFusion,
   applyDynamicIslandNonOcclusive,
+  applyDynamicIslandSuppressFullscreen,
+  applyDynamicIslandAutoStart,
   applyTaskbarLyricLayout,
 } from "@main/window";
 import { broadcast } from "@main/utils/broadcast";
@@ -63,13 +74,84 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
       setPreampGain(value as number);
       break;
     case "player.audioSuperResolution.enabled":
-    case "player.audioSuperResolution.backend": {
-      // 整体对象读取：开关或后端任一变化都重新下发完整 pair
+    case "player.audioSuperResolution.backend":
+    case "player.audioSuperResolution.params": {
+      // 整体对象读取：开关 / 后端 / 参数任一变化都重新下发完整三元组
       const sr = store.get("player.audioSuperResolution") as {
         enabled: boolean;
         backend: 0 | 1 | 2;
+        params: {
+          hpFreq: number;
+          hpQ: number;
+          drive: number;
+          h2Drive: number;
+          h2Mix: number;
+          wetMix: number;
+          inputLimit: number;
+          bypass: boolean;
+        };
       };
-      setAudioSuperResolution(sr.enabled, sr.backend);
+      setAudioSuperResolution(sr.enabled, sr.backend, sr.params);
+      break;
+    }
+    case "player.bassEnhancer.enabled":
+    case "player.bassEnhancer.freq":
+    case "player.bassEnhancer.gainDb":
+    case "player.bassEnhancer.q":
+    case "player.bassEnhancer.harmonicsMix":
+    case "player.bassEnhancer.bypass": {
+      const be = store.get("player.bassEnhancer") as {
+        enabled: boolean;
+        freq: number;
+        gainDb: number;
+        q: number;
+        harmonicsMix: number;
+        bypass: boolean;
+      };
+      setBassEnhancer(be.enabled, be);
+      break;
+    }
+    case "player.stereoWidener.enabled":
+    case "player.stereoWidener.width":
+    case "player.stereoWidener.crossFeed":
+    case "player.stereoWidener.haasEnabled":
+    case "player.stereoWidener.bypass": {
+      const sw = store.get("player.stereoWidener") as {
+        enabled: boolean;
+        width: number;
+        crossFeed: number;
+        haasEnabled: boolean;
+        bypass: boolean;
+      };
+      setStereoWidener(sw.enabled, sw);
+      break;
+    }
+    case "player.loudnessNormalizer.enabled":
+    case "player.loudnessNormalizer.targetLufs":
+    case "player.loudnessNormalizer.maxGainDb":
+    case "player.loudnessNormalizer.bypass": {
+      const ln = store.get("player.loudnessNormalizer") as {
+        enabled: boolean;
+        targetLufs: number;
+        maxGainDb: number;
+        bypass: boolean;
+      };
+      setLoudnessNormalizer(ln.enabled, ln);
+      break;
+    }
+    case "player.neuralUpsample.enabled":
+    case "player.neuralUpsample.backend":
+    case "player.neuralUpsample.params":
+    case "player.neuralUpsample.modelPath": {
+      const nu = store.get("player.neuralUpsample") as {
+        enabled: boolean;
+        backend: 0 | 1;
+        modelPath: string | null;
+        params: { inputGainDb: number; wetMix: number; bypass: boolean };
+      };
+      setNeuralUpsample(nu.enabled, nu.backend, nu.params);
+      // 模型路径变化时尝试加载（OnceLock：首次成功后不再重试）
+      if (nu.modelPath) void loadNeuralModel(nu.modelPath);
       break;
     }
     case "system.taskbarProgress":
@@ -78,6 +160,25 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
     case "system.registerOrpheusProtocol":
       setOrpheusProtocolRegistered(value as boolean);
       break;
+    case "system.proxy.protocol":
+    case "system.proxy.host":
+    case "system.proxy.port":
+    case "system.proxy.username":
+    case "system.proxy.password": {
+      // 整体对象读取：代理任一字段变化都重新下发完整配置
+      const proxy = store.get("system.proxy") as ProxySettings;
+      setProxy(proxy);
+      break;
+    }
+    case "system.preventSleep": {
+      // 配置变更时按当前播放状态同步；播放器未创建时按未播放处理
+      let playing = false;
+      try {
+        playing = getPlayer().getStatus().state === "playing";
+      } catch {}
+      syncPreventSleep(playing, value as boolean);
+      break;
+    }
     case "externalApi.enabled":
       void (value ? startServer() : stopServer());
       break;
@@ -104,6 +205,12 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
       break;
     case "dynamicIsland.nonOcclusive":
       applyDynamicIslandNonOcclusive(value as boolean);
+      break;
+    case "dynamicIsland.suppressFullscreen":
+      applyDynamicIslandSuppressFullscreen(value as boolean);
+      break;
+    case "dynamicIsland.autoStart":
+      applyDynamicIslandAutoStart(value as boolean);
       break;
     case "taskbarLyric.position":
     case "taskbarLyric.autoMaxWidth":

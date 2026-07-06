@@ -1,7 +1,7 @@
 import { store } from "@main/store";
 import { isWin } from "@main/utils/config";
 import { createDesktopLyricWindow } from "./desktopLyric";
-import { createDynamicIslandWindow } from "./dynamicIsland";
+import { createDynamicIslandWindow, applyDynamicIslandAutoStart } from "./dynamicIsland";
 import { createTaskbarLyricWindow } from "./taskbarLyric";
 
 export { createWindow } from "./create";
@@ -43,6 +43,8 @@ export {
   applyDynamicIslandHorizontalOffset,
   applyDynamicIslandNotchFusion,
   applyDynamicIslandNonOcclusive,
+  applyDynamicIslandSuppressFullscreen,
+  applyDynamicIslandAutoStart,
   moveDynamicIslandWindow,
   saveDynamicIslandState,
 } from "./dynamicIsland";
@@ -61,4 +63,6 @@ export const restoreLyricWindows = (): void => {
   if (isWin && store.get("windowStates.taskbarLyric.visible")) {
     createTaskbarLyricWindow();
   }
+  // 同步灵动岛开机自启设置到系统（不依赖窗口可见，每次启动都同步）
+  applyDynamicIslandAutoStart(store.get("dynamicIsland").autoStart);
 };

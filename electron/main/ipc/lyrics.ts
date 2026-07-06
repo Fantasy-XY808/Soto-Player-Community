@@ -100,8 +100,8 @@ const resolveTTMLOverlay = async (
     // QM mid 放前面（AMLL DB 早期 QM 条目以 mid 为文件名的居多）
     if (platform === "qqmusic") push(cached?.extra?.mid);
     if (track.source === platform) push(track.id);
-    // QM 在线 Track 默认走 byId
-    if (track.source === platform) push(track.extId);
+    // QM 在线 Track 默认走 byId；extId 仅 QM 用作二级 ID（网易云 extId 留给电台节目 id，不参与 TTML 匹配）
+    if (platform === "qqmusic" && track.source === platform) push(track.extId);
     push(cached?.platformId);
     if (ids.length === 0) return { ok: true, data: null };
     return { ok: true, data: await fetchTTML(platform, ids) };

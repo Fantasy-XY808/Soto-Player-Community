@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { app, BrowserWindow } from "electron";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import {
@@ -25,6 +26,8 @@ import {
 import { registerCacheScheme, handleCacheProtocol } from "@main/utils/protocol";
 import { startServer, stopServer } from "@main/server";
 import { initUpdater, disposeUpdater } from "@main/services/updater";
+import { setProxy } from "@main/services/engine";
+import { store } from "@main/store";
 import { coreLog, initLogger } from "@main/utils/logger";
 import {
   initOrpheusRegistration,
@@ -32,6 +35,7 @@ import {
   captureOrpheusUrl,
 } from "@main/services/orpheus";
 import { cleanupListenTogether } from "@main/listenTogether";
+import { cleanupPreventSleep } from "@main/services/preventSleep";
 
 /**
  * 配置 Chromium 启动参数以优化内存占用
@@ -44,7 +48,9 @@ const configureMemoryOptimizations = (): void => {
     "disable-features",
     "SpareRendererForSitePerProcess,BackForwardCache",
   );
-  app.commandLine.appendSwitch("js-flags", "--max-old-space-size=512 --expose-gc");
+  // 生产环境限制 512MB 降低内存峰值；开发环境放宽到 1024MB 避免热重载 OOM
+  const maxOldSpace = app.isPackaged ? 512 : 1024;
+  app.commandLine.appendSwitch("js-flags", `--max-old-space-size=${maxOldSpace} --expose-gc`);
 };
 
 /** 内存指标采样间隔 */
@@ -75,9 +81,40 @@ const logProcessMemory = (): void => {
 };
 
 /**
+ * 检测当前进程是否具有 Windows 管理员权限
+ * `net session` 在管理员下返回 0，非管理员返回非 0
+ */
+const isWindowsAdmin = (): boolean => {
+  if (process.platform !== "win32") return true;
+  try {
+    const r = spawnSync("net", ["session"], { stdio: "ignore", windowsHide: true });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 检查管理员权限并记录日志
+ * 生产环境：由 electron-builder 的 requestedExecutionLevel="requireAdministrator" 自动提权
+ * 开发环境：由 easytier.ts 的 spawnElevated() 按需提权子进程
+ */
+const ensureElevated = (): void => {
+  if (process.platform !== "win32") return;
+  if (isWindowsAdmin()) {
+    console.log("[core] 已获取管理员权限");
+  } else if (app.isPackaged) {
+    console.warn("[core] 未获取管理员权限（manifest 应已自动提权，请检查构建配置）");
+  } else {
+    console.log("[core] 开发环境未提权，EasyTier 将按需弹出 UAC");
+  }
+};
+
+/**
  * 初始化应用
  */
 export const initApp = (): void => {
+  ensureElevated();
   configureMemoryOptimizations();
   // 初始化日志
   initLogger();
@@ -132,6 +169,8 @@ export const initApp = (): void => {
     pluginRegistry.init();
     // 初始化播放事件桥（需在 pluginRegistry.init 之后，读 hasEnabledControlPlugin）
     initPlaybackBridge();
+    // 同步代理配置到原生引擎（player 实例创建前先暂存，创建时自动应用）
+    setProxy(store.get("system.proxy"));
     // 恢复歌词相关窗口
     restoreLyricWindows();
     // 注册全局快捷键
@@ -169,5 +208,6 @@ export const initApp = (): void => {
     disposePlaybackBridge();
     disposeUpdater();
     void cleanupListenTogether();
+    cleanupPreventSleep();
   });
 };

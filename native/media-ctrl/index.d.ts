@@ -12,7 +12,7 @@ export interface DiscordConfig {
 }
 
 /** Discord 显示模式 */
-export type DiscordDisplayMode = /** Listening to SPlayer */
+export type DiscordDisplayMode = /** Listening to Soto Player */
 'Name'|
 /** Listening to {artist} */
 'State'|

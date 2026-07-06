@@ -221,9 +221,9 @@ impl Worker {
             .large_image(&data.cover_url)
             .large_text(&data.meta.album)
             .small_image(ICON_KEY)
-            .small_text("Soto-Player Community");
+            .small_text("Soto Player-Community");
 
-        let buttons = vec![Button::new("Soto-Player Community", "https://github.com/Fantasy-XY808/Soto-Player-Community")];
+        let buttons = vec![Button::new("Soto Player-Community", "https://github.com/Fantasy-XY808/Soto-Player-Community")];
 
         let status_type = match display_mode {
             DiscordDisplayMode::Name => StatusDisplayType::Name,

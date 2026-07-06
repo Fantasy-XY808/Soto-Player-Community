@@ -7,23 +7,19 @@ import {
 } from "@applemusic-like-lyrics/core";
 import { getFftFrame } from "@/services/playback";
 import { acquireFft, releaseFft } from "@/services/fftCapture";
+import { getBassPulse, toAmllLowFreqVolume } from "@/services/audioFeatures";
 
 export interface BackgroundRenderProps {
-  /** 专辑封面资源 URL */
   album?: string;
-  /** 是否处于播放状态，默认为 true */
   playing?: boolean;
-  /** 动画流动速度，默认为 2 */
   flowSpeed?: number;
-  /** 是否有歌词，默认为 true */
   hasLyric?: boolean;
-  /** 帧率，默认为 30 */
   fps?: number;
-  /** 渲染缩放比例，默认为 0.5 */
   renderScale?: number;
-  /** 是否随低频节拍脉动（默认 false，关闭则不采集 FFT） */
   enableBeat?: boolean;
-  /** 渲染器类，默认为 MeshGradientRenderer */
+  brightness?: number;
+  saturation?: number;
+  contrast?: number;
   renderer?: new (...args: ConstructorParameters<typeof BaseRenderer>) => BaseRenderer;
 }
 
@@ -34,17 +30,16 @@ const props = withDefaults(defineProps<BackgroundRenderProps>(), {
   fps: 30,
   renderScale: 0.5,
   enableBeat: false,
+  brightness: 1.0,
+  saturation: 1.0,
+  contrast: 1.0,
   renderer: () => MeshGradientRenderer,
 });
 
 const wrapperRef = ref<HTMLDivElement | null>(null);
 
-// 外部渲染器实例引用
 const bgRenderRef = shallowRef<AbstractBaseRenderer>();
 
-/**
- * 统一同步更新属性状态到底层渲染器
- */
 const updateRendererState = () => {
   const renderer = bgRenderRef.value;
   if (!renderer) return;
@@ -53,62 +48,50 @@ const updateRendererState = () => {
     renderer.setAlbum(props.album, false);
   }
   renderer.setFPS(props.fps);
-  renderer.setFlowSpeed(props.flowSpeed);
   renderer.setRenderScale(props.renderScale);
   renderer.setHasLyric(props.hasLyric);
+  syncRendererMotion();
+};
+
+const syncRendererMotion = () => {
+  const renderer = bgRenderRef.value;
+  if (!renderer) return;
 
   if (props.playing) {
+    renderer.setStaticMode(false);
+    renderer.setFlowSpeed(props.flowSpeed);
     renderer.resume();
   } else {
-    renderer.pause();
+    renderer.setFlowSpeed(0);
+    renderer.resume();
   }
 };
 
-// 低频平滑后音量
-let smoothedVolume = 0;
-/** RAF 节流间隔(ms),与后端 FFT 推送对齐,避免 60fps 冗余计算 */
-const FRAME_INTERVAL = 32;
-/** 上次 FFT 更新时间戳 */
-let lastFftTime = 0;
+const BASS_ATTACK = 0.45;
+const BASS_DECAY = 0.14;
 
-/**
- * 从最新 FFT 帧数据计算低频音量能量值 [0.0 - 1.0]
- * 30fps 节流与后端 FFT 推送对齐,避免 60fps 冗余计算
- */
+let smoothedPulse = 0;
+let lastFftFrame: readonly number[] = [];
+
 const updateLowFreqVolume = () => {
-  const now = performance.now();
-  if (now - lastFftTime < FRAME_INTERVAL) return;
-  lastFftTime = now;
   const data = getFftFrame();
   if (!data || data.length === 0) return;
+  if (data === lastFftFrame) return;
+  lastFftFrame = data;
 
-  // 提取低频部分（前 4 段，对数映射下约 80 - 90Hz，即低音鼓/贝斯基频区）
-  const lowBins = data.slice(0, 4);
-  const sum = lowBins.reduce((acc, val) => acc + val, 0);
-  const avg = sum / lowBins.length;
+  const pulse = getBassPulse(data);
+  const smoothFactor = pulse > smoothedPulse ? BASS_ATTACK : BASS_DECAY;
+  smoothedPulse = smoothedPulse + smoothFactor * (pulse - smoothedPulse);
 
-  // 映射与幂扩展动态范围
-  const threshold = 0.05;
-  const normalized = Math.max(0, (avg - threshold) / (1.0 - threshold));
-  const rawValue = Math.pow(normalized, 1.5);
-
-  // EMA 平滑处理，提供自然的过渡律动
-  const smoothFactor = 0.2;
-  smoothedVolume = smoothedVolume + smoothFactor * (rawValue - smoothedVolume);
-
-  bgRenderRef.value?.setLowFreqVolume(smoothedVolume);
+  bgRenderRef.value?.setLowFreqVolume(toAmllLowFreqVolume(smoothedPulse));
 };
 
 const { resume: resumeFftLoop, pause: pauseFftLoop } = useRafFn(updateLowFreqVolume, {
   immediate: false,
 });
 
-// 本地持有标记，保证 acquire / release 严格配对
 let fftAcquired = false;
 
-/**
- * 开始捕获 FFT 频谱数据
- */
 const startFftCapture = () => {
   if (!fftAcquired) {
     acquireFft();
@@ -117,9 +100,6 @@ const startFftCapture = () => {
   resumeFftLoop();
 };
 
-/**
- * 停止捕获 FFT 频谱数据
- */
 const stopFftCapture = () => {
   pauseFftLoop();
   if (fftAcquired) {
@@ -128,27 +108,24 @@ const stopFftCapture = () => {
   }
 };
 
-/**
- * 按播放状态与跳动开关同步 FFT 采集：仅在播放中且开启跳动时采集，
- * 否则停止采集并把低频音量复位为 1.0（不脉动）
- */
 const syncFftCapture = () => {
   if (props.playing && props.enableBeat) {
     startFftCapture();
   } else {
     stopFftCapture();
-    smoothedVolume = 0;
-    bgRenderRef.value?.setLowFreqVolume(1.0);
+    if (!props.enableBeat) {
+      smoothedPulse = 0;
+      lastFftFrame = [];
+      bgRenderRef.value?.setLowFreqVolume(1.0);
+    }
   }
 };
 
 onMounted(() => {
   if (!wrapperRef.value) return;
 
-  // 初始化 AMLL 底层渲染器
   bgRenderRef.value = CoreBackgroundRender.new(props.renderer);
 
-  // 设置 Canvas 自适应容器并附着 DOM
   const el = bgRenderRef.value.getElement();
   el.style.width = "100%";
   el.style.height = "100%";
@@ -164,14 +141,12 @@ onBeforeUnmount(() => {
 
   const renderer = bgRenderRef.value;
   if (renderer) {
-    // 同步释放底层 Canvas 与 WebGL 上下文，避免上下文泄漏
     renderer.pause();
     renderer.dispose();
     bgRenderRef.value = undefined;
   }
 });
 
-// 属性变化监听
 watch(
   () => props.album,
   (val) => {
@@ -183,11 +158,8 @@ watch(
 
 watch(
   () => props.playing,
-  (isPlaying) => {
-    if (bgRenderRef.value) {
-      if (isPlaying) bgRenderRef.value.resume();
-      else bgRenderRef.value.pause();
-    }
+  () => {
+    syncRendererMotion();
     syncFftCapture();
   },
 );
@@ -207,7 +179,7 @@ watch(
 watch(
   () => props.flowSpeed,
   (val) => {
-    bgRenderRef.value?.setFlowSpeed(val);
+    if (props.playing) bgRenderRef.value?.setFlowSpeed(val);
   },
 );
 
@@ -225,6 +197,11 @@ watch(
   },
 );
 
+const filterStyle = computed(
+  () =>
+    `brightness(${props.brightness}) saturate(${props.saturation}) contrast(${props.contrast})`,
+);
+
 defineExpose({
   bgRender: bgRenderRef,
   wrapperEl: wrapperRef,
@@ -232,7 +209,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="wrapperRef" class="background-render-wrapper" aria-hidden="true" />
+  <div ref="wrapperRef" class="background-render-wrapper" :style="{ filter: filterStyle }" aria-hidden="true" />
 </template>
 
 <style scoped>

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useStatusStore } from "@/stores/status";
+import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { getFftFrame } from "@/services/playback";
 import { acquireFft, releaseFft } from "@/services/fftCapture";
 import { useBreathing } from "@/composables/useBreathing";
+import { subscribeRaf } from "@/services/rafScheduler";
 
 interface Props {
   /** 是否处于活跃状态 */
@@ -15,6 +17,7 @@ withDefaults(defineProps<Props>(), {
 });
 
 const status = useStatusStore();
+const media = useMediaStore();
 const settings = useSettingsStore();
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -26,9 +29,9 @@ const SKIP_LOW = 4;
 /** 后端推送间隔（ms），与 audio-engine 的 32ms FFT 定时器对齐 */
 const PUSH_INTERVAL = 32;
 /** RAF 节流间隔(ms),30fps 与后端推送对齐 */
-const FRAME_INTERVAL = 32;
+const FRAME_INTERVAL = 33;
 /** 环绕条数量；2 的倍数便于左右镜像 */
-const NUM_BARS = 64;
+const NUM_BARS = 48;
 /**
  * 内圈半径（相对画布短边的比例）
  * 画布向外扩展 20%（inset: -20%），故封面边缘在画布的 50%/1.4 ≈ 0.357 处
@@ -40,11 +43,11 @@ const MAX_BAR_LENGTH_RATIO = 0.1;
 /** 条宽（弧度） */
 const BAR_WIDTH_RAD = (Math.PI * 2) / NUM_BARS / 1.6;
 /** 辉光层模糊半径（px） */
-const GLOW_BLUR = 12;
+const GLOW_BLUR = 8;
 /** 低频段结束 bin（用于驱动光环） */
 const BASS_BIN_END = 6;
 /** DPR 上限:限制高 DPI 屏渲染像素开销 */
-const MAX_DPR = 1.5;
+const MAX_DPR = 1.0;
 
 const prev = new Float32Array(FFT_SIZE);
 const curr = new Float32Array(FFT_SIZE);
@@ -54,6 +57,18 @@ let lastUpdate = 0;
 
 /** 共享节拍 scale，让光环与封面呼吸同步 */
 const { scale: breathingScale } = useBreathing();
+/** useBreathing scale 偏移上限（与 useBreathing 内 MAX_SCALE_OFFSET 一致） */
+const BREATHING_MAX_OFFSET = 0.08;
+/** 心跳最大放大上限：intensity=100 时最大放大至 1.8x（与 BetterLyrics 一致） */
+const HEART_MAX_OFFSET = 0.8;
+/** 心跳容器样式：以封面为中心整体等比放大 */
+const heartStyle = computed(() => {
+  if (!settings.player.spectrumBreathing) return { transform: "scale(1)" };
+  const intensity = Math.max(0, Math.min(1, settings.player.spectrumBreathingIntensity / 100));
+  const bassEnergy = Math.max(0, (breathingScale.value - 1) / BREATHING_MAX_OFFSET);
+  const offset = bassEnergy * intensity * HEART_MAX_OFFSET;
+  return { transform: `scale(${(1 + offset).toFixed(4)})` };
+});
 
 /** 调整画布分辨率：CSS 尺寸跟随父容器，这里只设置像素分辨率 */
 const resizeCanvas = (): void => {
@@ -159,21 +174,17 @@ const drawHalo = (
 };
 
 /** 上次绘制时间戳,30fps 节流 */
-let lastDrawTime = 0;
 /** display 是否仍在衰减(避免静止时空转重绘) */
 let displaySettling = false;
+/** 共享 RAF 订阅取消函数；非空表示正在订阅 */
+let unsubscribe: (() => void) | null = null;
 
-/** 主绘制循环（30fps 节流,与后端 FFT 推送对齐） */
-const draw = (): void => {
+/** 主绘制循环（由共享 RAF 调度器按 FRAME_INTERVAL 节流调用） */
+const draw = (now: number): void => {
   const canvas = canvasRef.value;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-
-  // 30fps 节流
-  const now = performance.now();
-  if (now - lastDrawTime < FRAME_INTERVAL) return;
-  lastDrawTime = now;
 
   // 检测新帧推送
   const data = getFftFrame();
@@ -186,7 +197,7 @@ const draw = (): void => {
     displaySettling = true;
   }
 
-  // 静止优化
+  // 静止优化:无新数据且 display 已收敛时跳过重绘
   if (!newData && !displaySettling) return;
 
   // 时间插值
@@ -224,7 +235,7 @@ const draw = (): void => {
   const bass = Math.min(1, bassSum / bassEnd);
 
   ctx.clearRect(0, 0, cssSize, cssSize);
-  const fillStyle = getComputedStyle(canvas).color;
+  const fillStyle = getComputedStyle(canvas).color || "rgb(255, 255, 255)";
 
   // 光环层（在条之下）
   ctx.save();
@@ -245,8 +256,6 @@ const draw = (): void => {
   drawBars(ctx, values, cx, cy, innerR, maxLen);
 };
 
-const { resume, pause } = useRafFn(draw, { immediate: false });
-
 let fftAcquired = false;
 
 const startCapture = (): void => {
@@ -254,11 +263,16 @@ const startCapture = (): void => {
     acquireFft();
     fftAcquired = true;
   }
-  resume();
+  if (!unsubscribe) {
+    unsubscribe = subscribeRaf(draw, FRAME_INTERVAL);
+  }
 };
 
 const stopCapture = (): void => {
-  pause();
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
   if (fftAcquired) {
     releaseFft();
     fftAcquired = false;
@@ -272,6 +286,14 @@ watch(
     else stopCapture();
   },
   { immediate: true },
+);
+
+// 切歌时触发一次重绘清除 canvas
+watch(
+  () => media.track?.id,
+  () => {
+    displaySettling = true;
+  },
 );
 
 let resizeObserver: ResizeObserver | null = null;
@@ -301,7 +323,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="absolute pointer-events-none transition-opacity duration-500 around-spectrum-wrap"
-    :style="{ opacity: show ? 1 : 0 }"
+    :style="{ opacity: show ? 1 : 0, ...heartStyle }"
   >
     <canvas ref="canvasRef" class="around-spectrum-canvas" />
   </div>
@@ -319,6 +341,8 @@ onBeforeUnmount(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  color: rgb(var(--s-cover));
+  color: var(--spectrum-color, rgb(var(--s-cover)));
+  filter: brightness(var(--spectrum-brightness, 1)) saturate(var(--spectrum-saturate, 1));
+  transition: filter 0.3s ease;
 }
 </style>

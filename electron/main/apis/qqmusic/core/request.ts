@@ -6,9 +6,11 @@
  * - 首次请求前先调 music.getSession.session 拿 uid/sid/userip，缓存 1 小时
  * - 没有加密：API 本身明文 JSON POST，靠 UA + QIMEI36 等 comm 字段伪装客户端
  * - Referer 设为 https://y.qq.com，部分接口会校验
+ * - withCredentials=true 时，注入用户 cookie 与 uin，用于 VIP 接口鉴权
  */
 
 import { QM_API_URL, QM_HEADERS, SESSION_TTL, getCommonParams } from "./config";
+import { getQqCookieSync, getQqUinSync } from "@main/ipc/qqmusic";
 
 /** Session 字段（可能缺失则下次请求会自动补拿） */
 interface SessionCache {
@@ -34,10 +36,13 @@ interface FcgResponse {
 }
 
 /** 直接发起一次 fcg POST（不做 session 注入，用于初始化自身） */
-const postRaw = async (body: unknown): Promise<FcgResponse> => {
+const postRaw = async (
+  body: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<FcgResponse> => {
   const res = await fetch(QM_API_URL, {
     method: "POST",
-    headers: QM_HEADERS,
+    headers: { ...QM_HEADERS, ...extraHeaders },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(8000),
   });
@@ -85,29 +90,40 @@ const ensureSession = (): Promise<void> => {
  * @param module 业务 module（如 music.search.SearchCgiService）
  * @param method 业务 method（如 DoSearchForQQMusicMobile）
  * @param param  业务 param
+ * @param withCredentials true 时注入用户 cookie + uin（用于 VIP 接口鉴权）
  * @returns request.data 的业务数据段
  */
 export const qmRequest = async <T = unknown>(
   module: string,
   method: string,
   param: Record<string, unknown>,
+  withCredentials = false,
 ): Promise<T> => {
   await ensureSession();
+
+  const cookie = withCredentials ? getQqCookieSync() : null;
+  const uin = withCredentials ? getQqUinSync() : null;
+  // 调用方要求带凭证但本地无 cookie：直接抛错，由上层回落匿名
+  if (withCredentials && !cookie) {
+    throw new Error("QM withCredentials requested but no cookie available");
+  }
 
   const comm = {
     ...getCommonParams(),
     ...(session.uid ? { uid: session.uid } : {}),
     ...(session.sid ? { sid: session.sid } : {}),
     ...(session.userip ? { userip: session.userip } : {}),
+    ...(uin ? { uin } : {}),
   };
 
   const body = { comm, request: { module, method, param } };
+  const extraHeaders = cookie ? { Cookie: cookie } : undefined;
 
   // QM 后端偶发瞬时错误
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
     try {
-      const data = await postRaw(body);
+      const data = await postRaw(body, extraHeaders);
       const outerCode = data.code ?? 0;
       const innerCode = data.request?.code ?? 0;
       if (outerCode !== 0 || innerCode !== 0) {

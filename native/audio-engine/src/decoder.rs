@@ -14,8 +14,32 @@ use crate::metadata;
 use crate::shared::{AudioChunk, AudioMetadata, Shared};
 
 /// 播放输出目标格式（重采样后送入 rodio）
+/// TARGET_SAMPLE_RATE 是低采样率源的下限：48kHz 以下统一升采样到 48k，
+/// 保证低采样率音源在 DSP 链与 FFT 路径上的频率响应一致
 pub const TARGET_SAMPLE_RATE: u32 = 48000;
 pub const TARGET_CHANNELS: u16 = 2;
+
+/// 高采样率上限（Hz）：超过此值的源率在 DSP 链路里按此值工作，
+/// 避免 192kHz+ 在低端设备上引发实时 DSP 过载
+pub const MAX_DSP_SAMPLE_RATE: u32 = 192_000;
+
+/**
+ * 计算实际进入 DSP 链的采样率（player_resampler 输出率）
+ *
+ * - 源率 ≤ 48k 时统一升到 48k（兼容性最好，避免 44.1k 之类低率在 DSP 上偏频）
+ * - 源率 > 48k（96k/192k Hi-Res）保留原采样率，不强制降到 48k 才丢弃高频细节
+ * - 上限 MAX_DSP_SAMPLE_RATE，避免 192k+ 引发实时 DSP 过载
+ *
+ * device_rate 仅作日志参考；实际播放由 rodio 在 UniformSourceIterator 中
+ * 把 player_resampler 输出率重采样到设备原生率（高/低方向都能转）
+ *
+ * @param source_rate - 解码前的原始采样率
+ * @param device_rate - 输出设备原生采样率（仅用于日志/未来扩展）
+ * @returns player_resampler 的目标输出采样率
+ */
+pub fn effective_sample_rate(source_rate: u32, _device_rate: u32) -> u32 {
+    source_rate.max(TARGET_SAMPLE_RATE).min(MAX_DSP_SAMPLE_RATE)
+}
 
 /// 自定义 IO 源（HttpRangeSource / File）读取失败时，ffmpeg_audio 的 read 回调统一映射为此错误码
 const AVERROR_EIO: i32 = sys::averror(libc::EIO);
@@ -23,12 +47,14 @@ const AVERROR_EIO: i32 = sys::averror(libc::EIO);
 /// 解码会话所需的资源（跨 seek 复用，避免重建 ffmpeg_audio 上下文）
 ///
 /// 1-to-N 分发：同一帧零拷贝喂给两个重采样器
-/// - player_resampler: 48k stereo f32，给 rodio 播放
+/// - player_resampler: target_rate stereo f32，给 rodio 播放（target_rate 自适应源率）
 /// - fft_resampler:    48k mono   f32，给 FFT 频谱分析
 pub struct DecoderData {
     reader: AudioReader,
     player_resampler: Resampler,
     fft_resampler: Resampler,
+    /// player_resampler 输出采样率（seek 复用时要让新 Shared 同步此值，位置计算才能正确）
+    target_rate: u32,
     /// 中断标志：仅网络源持有；本地 File 不会长时间阻塞，没必要绑
     /// 通过 shared.bind_interrupt 注入，外部 stop() 触发后 HttpRangeSource::read 会返回 Interrupted
     interrupt_flag: Option<Arc<AtomicBool>>,
@@ -76,12 +102,15 @@ pub fn start_decode(
     shared: Arc<Shared>,
     cover_cache_dir: Option<&str>,
 ) -> Result<(AudioMetadata, JoinHandle<DecoderData>)> {
-    // 播放重采样目标 = 输出设备原生采样率
-    let target_rate = shared.sample_rate();
-    let (reader, player_resampler, fft_resampler, interrupt_flag) = open_source(source, target_rate)?;
+    // 先打开 reader，再按源率算 target_rate，最后按 target_rate 建 player_resampler
+    let (reader, player_resampler, fft_resampler, interrupt_flag, target_rate) =
+        open_source(source, shared.sample_rate())?;
     if let Some(ref flag) = interrupt_flag {
         shared.bind_interrupt(Arc::clone(flag));
     }
+    // 把 Shared 的 sample_rate 校准到 player_resampler 实际输出率，
+    // 保证位置计算（consumed_position）与响度分析器（LoudnessAnalyzer）的基准率正确
+    shared.set_sample_rate(target_rate);
 
     let info = reader.source_info();
     let duration_secs = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
@@ -124,6 +153,7 @@ pub fn start_decode(
         reader,
         player_resampler,
         fft_resampler,
+        target_rate,
         interrupt_flag,
     };
 
@@ -142,6 +172,10 @@ pub fn start_decode(
 
 /// 用已有的 DecoderData 继续解码（seek 后复用）
 pub fn resume_decode(data: DecoderData, shared: Arc<Shared>) -> JoinHandle<DecoderData> {
+    // seek 复用旧 DecoderData，旧 player_resampler 仍按旧 target_rate 输出；
+    // 新 Shared 由 player.rs 按 device_rate 创建，这里同步成旧 target_rate，
+    // 让位置计算 / 响度分析器使用与样本实际率一致的基准
+    shared.set_sample_rate(data.target_rate);
     if let Some(flag) = data.interrupt_handle() {
         shared.bind_interrupt(flag);
     }
@@ -157,13 +191,22 @@ pub fn resume_decode(data: DecoderData, shared: Arc<Shared>) -> JoinHandle<Decod
 
 /// 根据 source 协议打开音频：http(s) 走 HttpRangeSource + 拿 cancel flag，其他走本地 File
 ///
-/// `target_rate` 为播放重采样目标采样率（输出设备原生采样率）；FFT 路径固定 48000
+/// 流程：先建 reader → 读 source_info 拿源率 → 按 max(source, 48k) 算 target_rate → 建 player_resampler
+/// FFT 路径固定 48k mono，与 player 路径解耦
 ///
-/// 返回 (reader, 播放重采样器, FFT 重采样器, cancel 标志)
+/// `device_rate` 仅用于日志；实际播放由 rodio 把 target_rate 重采样到设备原生率
+///
+/// 返回 (reader, 播放重采样器, FFT 重采样器, cancel 标志, target_rate)
 fn open_source(
     source: &str,
-    target_rate: u32,
-) -> Result<(AudioReader, Resampler, Resampler, Option<Arc<AtomicBool>>)> {
+    device_rate: u32,
+) -> Result<(
+    AudioReader,
+    Resampler,
+    Resampler,
+    Option<Arc<AtomicBool>>,
+    u32,
+)> {
     let (reader, cancel) = if http_source::is_network_source(source) {
         let http = http_source::HttpRangeSource::new(source)?;
         let cancel = http.cancel_handle();
@@ -171,11 +214,30 @@ fn open_source(
             AudioReader::new(http).with_context(|| format!("打开网络音频失败: {source}"))?;
         (reader, Some(cancel))
     } else {
-        let file = File::open(source).with_context(|| format!("打开本地文件失败: {source}"))?;
-        let reader =
-            AudioReader::new(file).with_context(|| format!("打开本地音频失败: {source}"))?;
-        (reader, None)
+        // 本地文件：先检测 unlock-music 加密格式（ncm/qmc/kgm/kwm/mflac/tm）
+        // 加密文件先解密为内存字节流，再喂给 AudioReader；普通文件直接 File::open
+        if let Some(fmt) = crate::decryptor::detect(source) {
+            let decrypted = crate::decryptor::decrypt(source, fmt)
+                .with_context(|| format!("解密加密音频失败: {source}"))?;
+            let reader = AudioReader::new(decrypted)
+                .with_context(|| format!("打开解密音频失败: {source}"))?;
+            (reader, None)
+        } else {
+            let file = File::open(source).with_context(|| format!("打开本地文件失败: {source}"))?;
+            let reader =
+                AudioReader::new(file).with_context(|| format!("打开本地音频失败: {source}"))?;
+            (reader, None)
+        }
     };
+
+    // 读源率：96k/192k Hi-Res 保留原率，48k 以下统一升到 48k
+    let info = reader.source_info();
+    let stream_info = metadata::extract_stream_info(info);
+    let target_rate = effective_sample_rate(stream_info.sample_rate, device_rate);
+    debug!(
+        source_rate = stream_info.sample_rate,
+        device_rate, target_rate, "open_source: 已确定播放重采样目标率",
+    );
 
     let player_opts = ResampleOptions::new()
         .sample_rate(target_rate as i32)
@@ -194,7 +256,7 @@ fn open_source(
         .build_resampler(fft_opts)
         .with_context(|| "构建 FFT 重采样器失败")?;
 
-    Ok((reader, player_resampler, fft_resampler, cancel))
+    Ok((reader, player_resampler, fft_resampler, cancel, target_rate))
 }
 
 /// 核心解码循环：每帧解码一次，零拷贝分发到播放 + FFT 两个重采样器

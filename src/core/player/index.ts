@@ -15,7 +15,9 @@ import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyricLoader";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import { syncAutomixEnabled, stopAutomix } from "@/services/automix";
 import { resolveTrackSource } from "@/services/audioSource";
+import { consumePreloaded } from "@/services/songPreload";
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { extractColorFromUrl } from "@/utils/color";
@@ -87,6 +89,10 @@ export const load = async (source: string, autoPlay = true, meta?: Track): Promi
   abLoop.reset();
   // 清除上一次 seek 残留
   seekTarget = null;
+  if (seekTimeoutId !== null) {
+    clearTimeout(seekTimeoutId);
+    seekTimeoutId = null;
+  }
   playback.setSeeking(false);
   resetForLoad(meta?.duration ?? 0);
   // 非本地并行歌词与取色
@@ -141,8 +147,11 @@ const loadTrack = async (track: Track | null): Promise<void> => {
   lyricLoader.beginLoad();
   resetForLoad(track.duration ?? 0);
   void window.api.player.stop();
-  // 解析 URL
-  const resolved = await resolveTrackSource(track);
+  // 优先消费预解析的 URL，命中则跳过 resolveTrackSource 的网络往返
+  const preloaded = consumePreloaded(track.id);
+  const resolved = preloaded
+    ? { source: preloaded, fromCache: false }
+    : await resolveTrackSource(track);
   // 期间有新点击，让位给最新的 loadTrack
   if (myToken !== trackToken) return;
   // 是否可跳曲
@@ -293,6 +302,21 @@ export const stop = async (): Promise<void> => {
  * 后端推送的 position 必须接近此值才会被接受
  */
 let seekTarget: number | null = null;
+/** seek 超时定时器：3 秒内 position 未到达 seekTarget 则强制解除冻结 */
+let seekTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 清除 seek 冻结状态（seekTarget + seeking + 超时定时器）
+ * 用于 seek 成功到达、seek 失败、超时兜底三种场景
+ */
+const clearSeekState = (): void => {
+  seekTarget = null;
+  playback.setSeeking(false);
+  if (seekTimeoutId !== null) {
+    clearTimeout(seekTimeoutId);
+    seekTimeoutId = null;
+  }
+};
 
 /**
  * 判断后端推送的 position 是否已到达 seek 目标附近
@@ -303,8 +327,7 @@ export const hasReachedSeekTarget = (position: number): boolean => {
   if (seekTarget === null) return true;
   // 容差：后端推送的位置在 seek 目标 ±1s 内视为已到达
   if (Math.abs(position - seekTarget) < 1000) {
-    seekTarget = null;
-    playback.setSeeking(false);
+    clearSeekState();
     return true;
   }
   return false;
@@ -329,11 +352,21 @@ export const seek = async (posMs: number): Promise<void> => {
 
   // 设置 seek 目标，屏蔽旧 position 推送
   seekTarget = posMs;
+  // 超时兜底：后端可能 seek 失败但返回 success，或音频源加载慢导致
+  // position 永远到不了 seekTarget 附近，此时 seeking 会永久卡死，
+  // getCurrentTime() 冻结、歌词不再插值。3 秒后强制解除
+  if (seekTimeoutId !== null) clearTimeout(seekTimeoutId);
+  seekTimeoutId = setTimeout(() => {
+    if (seekTarget === posMs) clearSeekState();
+  }, 3000);
 
   const result = await window.api.player.seek(posMs);
   if (result.success) {
     status.position = posMs;
     playback.setCurrentTime(posMs);
+  } else {
+    // seek 失败：立即清除冻结状态
+    clearSeekState();
   }
 };
 
@@ -348,6 +381,11 @@ export const markSeek = (posMs: number): void => {
   status.position = posMs;
   playback.setCurrentTime(posMs);
   seekTarget = posMs;
+  // 与 seek() 相同的超时兜底
+  if (seekTimeoutId !== null) clearTimeout(seekTimeoutId);
+  seekTimeoutId = setTimeout(() => {
+    if (seekTarget === posMs) clearSeekState();
+  }, 3000);
 };
 
 /**
@@ -810,104 +848,169 @@ export const initPlayer = async (): Promise<void> => {
   if (initialized) return;
   initialized = true;
   console.log("[player] init");
-  // 先从主进程同步后端配置，确保 system 设置可用
-  const settings = useSettingsStore();
-  await settings.syncSystem();
-  // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
-  await useStreamingStore().init();
-  // 插件 store 同理：在线歌曲 URL 兜底走插件，列表必须在 loadTrack 前就绪
-  void usePluginsStore().load();
-  await queue.restoreQueue();
-  const status = useStatusStore();
-  // 恢复上次的音量和播放模式到主进程
-  await window.api.player.setVolume(status.volume);
-  syncPlayMode();
-  // 应用渐入渐出配置
-  const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer, audioSuperResolution } =
-    settings.system.player;
-  await window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0);
-  // 应用音量均衡配置
-  await window.api.player.setNormalizationEnabled(loudnessNormalization ?? false);
-  // 应用均衡器配置
-  if (equalizer) {
-    // 同步频段数量与每段参数（频率 / Q / 增益 / 滤波器类型）
-    await window.api.player.setEqualizerBandCount(equalizer.bands.length);
-    for (const [idx, band] of equalizer.bands.entries()) {
-      await window.api.player.setEqualizerBandParams(idx, {
-        freq: band.freq,
-        q: band.q,
-        gain: band.gain,
-        filterType: band.filterType,
-      });
-    }
-    await window.api.player.setPreampGain(equalizer.preamp);
-    await window.api.player.setBassGain(equalizer.bassBoost ?? 0);
-    await window.api.player.setTrebleGain(equalizer.trebleBoost ?? 0);
-    await window.api.player.setSurroundGain(equalizer.surround ?? 1.0);
-    await window.api.player.setEqualizerBypass(equalizer.bypass ?? false);
-    await window.api.player.setEqualizerEnabled(equalizer.enabled);
-  }
-  // 应用音频超分配置（默认关闭，开启后由 Rust 侧 process_interleaved_stereo 处理）
-  if (audioSuperResolution) {
-    await window.api.player.setAudioSuperResolution(
-      audioSuperResolution.enabled,
-      audioSuperResolution.backend,
-    );
-  }
-  // 刷新设备列表并恢复上次选择的输出设备
-  await refreshDevices();
-  if (settings.player.outputDevice) {
-    await window.api.player.setOutputDevice(settings.player.outputDevice);
-  }
-  // 先订阅事件，确保 load 触发播放后 position 事件能被接收
+
+  // 第一优先：订阅主进程播放事件。
+  // 必须在所有 await 之前注册，否则后续步骤中任何 throw 会导致 onEvent 永不注册，
+  // position/fft 事件全部丢失，进度条和频谱同时失效。
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
-  // 安装播放统计累加器
-  installPlayStats();
-  // 订阅主进程下发的歌词偏移变化
-  const media = useMediaStore();
-  // 当前歌曲喜欢状态变化时同步到托盘菜单
-  const fav = useFavorite();
-  watch(
-    () => fav.isLiked(media.track),
-    (liked) => window.api.player.syncLikeState(liked),
-    { immediate: true },
-  );
-  window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
-    status.lyricOffsetMs = offsetMs;
-    media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
-  });
-  // 获取歌曲偏移
+  console.log("[player] onEvent 已注册");
+
   try {
-    const snap = await window.api.nowPlaying.requestSnapshot();
-    status.lyricOffsetMs = snap.lyricOffsetMs;
-  } catch (error) {
-    console.error("[player] requestSnapshot failed", error);
-  }
-  const lastTrack = status.currentTrack;
-  if (lastTrack) {
-    const lastPosition = status.position;
-    useMediaStore().setTrack(lastTrack);
-    const resolved = await resolveTrackSource(lastTrack);
-    if (resolved) {
-      lyricLoader.beginLoad();
-      const result = await load(resolved.source, settings.system.player.autoPlay, lastTrack);
-      if (result.ok && settings.system.player.rememberLastTrack && lastPosition > 0) {
-        await seek(lastPosition);
+    // 从主进程同步后端配置，确保 system 设置可用
+    const settings = useSettingsStore();
+    await settings.syncSystem();
+    // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
+    await useStreamingStore().init();
+    // 插件 store 同理：在线歌曲 URL 兜底走插件，列表必须在 loadTrack 前就绪
+    void usePluginsStore().load();
+    await queue.restoreQueue();
+    const status = useStatusStore();
+    // 恢复上次的音量和播放模式到主进程
+    await window.api.player.setVolume(status.volume);
+    syncPlayMode();
+    // 应用渐入渐出配置
+    const {
+      fadeEnabled,
+      fadeDuration,
+      loudnessNormalization,
+      equalizer,
+      audioSuperResolution,
+      bassEnhancer,
+      stereoWidener,
+      loudnessNormalizer,
+      neuralUpsample,
+      spatialAudio,
+    } = settings.system.player;
+    await window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0);
+    // 应用音量均衡配置
+    await window.api.player.setNormalizationEnabled(loudnessNormalization ?? false);
+    // 应用均衡器配置
+    if (equalizer) {
+      // 同步频段数量与每段参数（频率 / Q / 增益 / 滤波器类型）
+      await window.api.player.setEqualizerBandCount(equalizer.bands.length);
+      for (const [idx, band] of equalizer.bands.entries()) {
+        await window.api.player.setEqualizerBandParams(idx, {
+          freq: band.freq,
+          q: band.q,
+          gain: band.gain,
+          filterType: band.filterType,
+        });
       }
-      if (result.ok && resolved.cacheRequest) {
-        cacheScheduler.schedule(lastTrack.id, resolved.cacheRequest);
+      await window.api.player.setPreampGain(equalizer.preamp);
+      await window.api.player.setBassGain(equalizer.bassBoost ?? 0);
+      await window.api.player.setTrebleGain(equalizer.trebleBoost ?? 0);
+      await window.api.player.setSurroundGain(equalizer.surround ?? 1.0);
+      await window.api.player.setEqualizerBypass(equalizer.bypass ?? false);
+      await window.api.player.setEqualizerEnabled(equalizer.enabled);
+    }
+    // 应用音频超分配置（默认关闭，开启后由 Rust 侧 process_interleaved_stereo 处理）
+    if (audioSuperResolution) {
+      await window.api.player.setAudioSuperResolution(
+        audioSuperResolution.enabled,
+        audioSuperResolution.backend,
+        audioSuperResolution.params,
+      );
+    }
+    // 应用低音增强配置（2 阶 low-shelf + tanh 软饱和）
+    if (bassEnhancer) {
+      await window.api.player.setBassEnhancer(bassEnhancer.enabled, bassEnhancer);
+    }
+    // 应用立体声展宽配置（Mid-Side 处理）
+    if (stereoWidener) {
+      await window.api.player.setStereoWidener(stereoWidener.enabled, stereoWidener);
+    }
+    // 应用响度归一化配置（500ms 滑动窗口 RMS）
+    if (loudnessNormalizer) {
+      await window.api.player.setLoudnessNormalizer(loudnessNormalizer.enabled, loudnessNormalizer);
+    }
+    // 应用神经网络上采样配置（框架阶段：无 ONNX 模型时直通，不修改信号）
+    if (neuralUpsample) {
+      if (neuralUpsample.modelPath) {
+        await window.api.player.loadNeuralModel(neuralUpsample.modelPath);
+      }
+      await window.api.player.setNeuralUpsample(
+        neuralUpsample.enabled,
+        neuralUpsample.backend,
+        neuralUpsample.params,
+      );
+    }
+    // 应用空间音频配置（组合预设：开启时覆盖上述三个独立 DSP 的配置，制造包裹感）
+    // 必须在三个独立 DSP 之后调用，否则会被独立配置覆盖
+    if (spatialAudio?.enabled) {
+      await window.api.player.setSpatialAudio(spatialAudio);
+    }
+    // FFT 等响度补偿：影响频谱视觉而非音频，主进程已默认开启；显式同步以应用用户偏好
+    await window.api.player.setFftEqualLoudness(settings.system.player.fftEqualLoudness ?? true);
+    // 刷新设备列表并恢复上次选择的输出设备
+    await refreshDevices();
+    if (settings.player.outputDevice) {
+      await window.api.player.setOutputDevice(settings.player.outputDevice);
+    }
+    // 安装播放统计累加器
+    installPlayStats();
+    // 订阅主进程下发的歌词偏移变化
+    const media = useMediaStore();
+    // 当前歌曲喜欢状态变化时同步到托盘菜单
+    const fav = useFavorite();
+    watch(
+      () => fav.isLiked(media.track),
+      (liked) => window.api.player.syncLikeState(liked),
+      { immediate: true },
+    );
+    window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
+      status.lyricOffsetMs = offsetMs;
+      media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
+    });
+    // 获取歌曲偏移
+    try {
+      const snap = await window.api.nowPlaying.requestSnapshot();
+      status.lyricOffsetMs = snap.lyricOffsetMs;
+    } catch (error) {
+      console.error("[player] requestSnapshot failed", error);
+    }
+    const lastTrack = status.currentTrack;
+    if (lastTrack) {
+      const lastPosition = status.position;
+      useMediaStore().setTrack(lastTrack);
+      const resolved = await resolveTrackSource(lastTrack);
+      if (resolved) {
+        lyricLoader.beginLoad();
+        const result = await load(resolved.source, settings.system.player.autoPlay, lastTrack);
+        if (result.ok && settings.system.player.rememberLastTrack && lastPosition > 0) {
+          await seek(lastPosition);
+        }
+        if (result.ok && resolved.cacheRequest) {
+          cacheScheduler.schedule(lastTrack.id, resolved.cacheRequest);
+        }
+      } else {
+        status.state = "idle";
       }
     } else {
       status.state = "idle";
     }
-  } else {
-    status.state = "idle";
+
+    // Automix：根据配置同步开关，并监听 enabled 变化
+    syncAutomixEnabled(settings.system.automix?.enabled ?? false);
+    watch(
+      () => settings.system.automix?.enabled ?? false,
+      (enabled) => syncAutomixEnabled(enabled),
+    );
+    // FFT 等响度补偿开关变化时同步到主进程（走 engine.ts 暂存，resetPlayer 重建后仍生效）
+    watch(
+      () => settings.system.player.fftEqualLoudness,
+      (enabled) => {
+        void window.api.player.setFftEqualLoudness(enabled ?? true);
+      },
+    );
+  } catch (error) {
+    console.error("[player] initPlayer 后半段失败（onEvent 已注册，不影响事件接收）:", error);
   }
 };
 
 /** 清理事件订阅 */
 export const disposePlayer = (): void => {
+  stopAutomix();
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;

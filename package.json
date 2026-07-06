@@ -1,9 +1,9 @@
 {
   "name": "soto-player-community",
-  "productName": "Soto-Player Community",
+  "productName": "Soto Player-Community",
   "desktopName": "top.fantasy-xy808.soto_player_community",
-  "version": "2.3.1",
-  "description": "Soto-Player Community / 水芸音乐播放器 — 基于 SPlayer-Next 二次开发的现代化桌面音乐播放器",
+  "version": "2.3.8",
+  "description": "Soto Player-Community / 水芸音乐播放器 — 现代化桌面音乐播放器",
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "main": "./out/main/index.js",
@@ -35,6 +35,7 @@
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
     "build:native": "tsx scripts/build-native.ts",
+    "download-easytier": "tsx scripts/download-easytier.ts",
     "start": "electron-vite preview",
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "build": "rimraf dist && pnpm build:native && pnpm typecheck && electron-vite build",
@@ -58,6 +59,8 @@
     "electron-updater": "^6.8.3",
     "font-list": "^2.0.2",
     "hono": "^4.12.25",
+    "plyr": "^3.7.8",
+    "socks-proxy-agent": "^10.1.0",
     "ws": "^8.20.1"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ import { useSettingsStore } from "@/stores/settings";
 import WindowControls from "@/components/layout/WindowControls.vue";
 import StepWelcome from "@/components/onboarding/StepWelcome.vue";
 import StepPreferences from "@/components/onboarding/StepPreferences.vue";
+import StepEffects from "@/components/onboarding/StepEffects.vue";
 import StepAgreement from "@/components/onboarding/StepAgreement.vue";
 import StepMigration from "@/components/onboarding/StepMigration.vue";
 import StepLibrary from "@/components/onboarding/StepLibrary.vue";
@@ -18,6 +19,7 @@ const STEPS = [
   { key: "agreement", component: StepAgreement },
   { key: "migration", component: StepMigration },
   { key: "preferences", component: StepPreferences },
+  { key: "effects", component: StepEffects },
   { key: "library", component: StepLibrary },
   { key: "streaming", component: StepStreaming },
   { key: "hotkeys", component: StepHotkeys },
@@ -87,7 +89,7 @@ const complete = async (): Promise<void> => {
           </span>
         </header>
 
-        <div class="relative flex-1 min-h-0 flex flex-col">
+        <div class="relative flex-1 min-h-0 flex flex-col overflow-auto">
           <Transition :name="direction === 'forward' ? 'slide-fwd' : 'slide-back'" mode="out-in">
             <component
               :is="currentStep.component"

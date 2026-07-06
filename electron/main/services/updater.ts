@@ -74,8 +74,30 @@ const bindEvents = (): void => {
   autoUpdater.on("update-downloaded", (info) => emit({ type: "downloaded", meta: toMeta(info) }));
   autoUpdater.on("error", (error) => {
     checking = false;
+    const message = error?.message ?? String(error);
+    // 仓库尚未发布任何版本时，按“无可用更新”处理，避免报错
+    if (message.includes("No published versions on GitHub")) {
+      updaterLog.info("仓库暂无已发布版本");
+      emit({ type: "notAvailable", manual: manualCheck });
+      return;
+    }
+    // 网络错误（连接重置 / 超时 / DNS 失败等）按"无可用更新"处理，避免每次定时检查都弹错误
+    // 仅手动检查时才把网络错误暴露给用户，让用户知道是网络问题而非无更新
+    if (
+      message.includes("ERR_CONNECTION_RESET") ||
+      message.includes("ERR_INTERNET_DISCONNECTED") ||
+      message.includes("ERR_NAME_NOT_RESOLVED") ||
+      message.includes("ERR_CONNECTION_TIMED_OUT") ||
+      message.includes("ENOTFOUND") ||
+      message.includes("ETIMEDOUT") ||
+      message.includes("ECONNRESET")
+    ) {
+      updaterLog.info("网络错误，跳过更新检查", message);
+      emit({ type: "notAvailable", manual: manualCheck });
+      return;
+    }
     updaterLog.error("更新出错", error);
-    emit({ type: "error", message: error?.message ?? String(error), manual: manualCheck });
+    emit({ type: "error", message, manual: manualCheck });
   });
 };
 

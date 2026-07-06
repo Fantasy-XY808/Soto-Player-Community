@@ -13,9 +13,11 @@
 
 import type { Track, PlayerState } from "@shared/types/player";
 import type {
+  ListenTogetherPermissions,
   ListenTogetherSettings,
   ListenTogetherMember,
   ListenTogetherStatus,
+  ListenTogetherCurrentTrack,
 } from "@shared/types/settings";
 import { store } from "@main/store";
 import { getPlayer } from "@main/services/engine";
@@ -27,7 +29,7 @@ let role: "idle" | "host" | "client" = "idle";
 
 /** 主机模式：本地账号信息 */
 let hostInfo: { name: string; level: UserLevel } | null = null;
-/** 主机模式：会话口令 */
+/** 主机模式：会话口令（null 表示未设置；空串表示已设置为"无口令"——两者需区分） */
 let hostPassword: string | null = null;
 /** 主机模式：监听端口 */
 let hostPort: number | null = null;
@@ -35,6 +37,8 @@ let hostPort: number | null = null;
 let hostAddress: string | null = null;
 /** 主机模式：已连接成员（按连接 id 索引） */
 const hostMembers = new Map<string, ListenTogetherMember>();
+/** 主机模式：主机下发给客户端的房客权限（启动时由 server 写入） */
+let hostPermissions: ListenTogetherPermissions | null = null;
 
 /** 客户端模式：连接的主机 URL */
 let clientUrl: string | null = null;
@@ -44,6 +48,10 @@ let clientHostName: string | null = null;
 let clientLatency = 0;
 /** 客户端模式：最近一次错误（用于 UI 提示） */
 let clientLastError: string | null = null;
+/** 客户端模式：主机同步过来的成员列表（含自己） */
+let clientMembers: ListenTogetherMember[] = [];
+/** 客户端模式：主机下发的房客权限（welcome 后写入；未握手前为 null） */
+let clientPermissions: ListenTogetherPermissions | null = null;
 
 /** 当前曲目（主机与客户端共用） */
 let currentTrack: Track | null = null;
@@ -83,6 +91,40 @@ const toSyncTrack = (track: Track | null): SyncTrack | null => {
   };
 };
 
+/** SyncTrack / Track → UI 展示用最小化曲目（与 ListenTogetherCurrentTrack 同构） */
+const toDisplayTrack = (track: Track | SyncTrack | null): ListenTogetherCurrentTrack | null => {
+  if (!track) return null;
+  // 区分 Track 与 SyncTrack：SyncTrack 有 source 字段且必为枚举值，Track 有 source 但可能为 streaming
+  const source =
+    track.source === "netease" ||
+    track.source === "qqmusic" ||
+    track.source === "kugou" ||
+    track.source === "local"
+      ? track.source
+      : "local";
+  // Track 类型上 artists 为数组，SyncTrack 上 artist 为字符串——按字段存在性适配
+  // "artists" in track 能正确收窄：SyncTrack 无 artists 字段，命中后 track 为 Track
+  const artist =
+    "artists" in track
+      ? (track.artists?.map((a) => a.name).join(", ") ?? "")
+      : (track as SyncTrack).artist ?? "";
+  // album 区分：SyncTrack.album 为 string，Track.album 为对象——按 typeof 收窄
+  // 此前用 "album" in track 外层判断，但两种类型都有 album 字段无法收窄，
+  // 导致 else 分支 track 仍为 Track | SyncTrack，as SyncTrack 转换被 TS 拒绝
+  const album =
+    typeof track.album === "string"
+      ? track.album
+      : (track.album?.name ?? "");
+  return {
+    id: String(track.id ?? ""),
+    source,
+    title: track.title ?? "",
+    artist,
+    album,
+    duration: track.duration ?? 0,
+  };
+};
+
 /** 当前生效配置 */
 const getConfig = (): ListenTogetherSettings =>
   store.get("listenTogether") as ListenTogetherSettings;
@@ -92,12 +134,22 @@ const buildStatus = (): ListenTogetherStatus => ({
   role,
   hostAddress,
   hostPort,
+  // hostPassword === null 表示从未设置（未启用口令）；空串表示用户主动留空（=无口令）
+  // 两者对外展示都是 hasPassword=false（与协议层 isPasswordSet 区分）
   hasPassword: hostPassword !== null && hostPassword.length > 0,
   members: Array.from(hostMembers.values()),
+  clientMembers,
+  clientPermissions,
   clientUrl,
   hostName: clientHostName,
   latency: clientLatency,
   lastError: clientLastError,
+  currentTrack: toDisplayTrack(currentTrack),
+  currentState:
+    currentState === "playing" ? "playing" : currentState === "paused" ? "paused" : "idle",
+  currentPosition,
+  currentQueue: currentQueue.map((t) => toDisplayTrack(t)!).filter(Boolean),
+  currentIndex,
 });
 
 /** 通知所有订阅者状态变化 */
@@ -149,6 +201,12 @@ export const enterHostMode = (
   hostPort = port;
   hostAddress = null;
   hostMembers.clear();
+  hostPermissions = null;
+  // 注意：不重置 current* 字段。
+  // 跨会话残留已由 exitHostMode / exitClientMode 处理（idle 进入 host 时
+  // current* 必为空）。这里保留 idle 期间累积的播放状态——用户在启动主机
+  // 前可能已在播放音乐，handlePlayerEvent 在 idle 期间也会写入 current*，
+  // 启动主机后客户端加入时 welcome 才能拿到正确的 currentTrack / queue。
   role = "host";
   startProgressTimer();
   notifyStatus();
@@ -163,10 +221,29 @@ export const exitHostMode = (): void => {
   hostPort = null;
   hostAddress = null;
   hostMembers.clear();
+  hostPermissions = null;
+  // 同步重置 current* 字段，UI 回到空闲态展示
+  currentTrack = null;
+  currentState = "idle";
+  currentPosition = 0;
+  currentQueue = [];
+  currentIndex = -1;
   if (role === "host") role = "idle";
   stopProgressTimer();
   notifyStatus();
 };
+
+/**
+ * 主机模式：写入房客权限（startHost 时由 server 调用，welcome 中下发）
+ */
+export const setHostPermissions = (permissions: ListenTogetherPermissions): void => {
+  hostPermissions = { ...permissions };
+  notifyStatus();
+};
+
+/** 主机模式：取房客权限（server 用于构造 welcome） */
+export const getHostPermissions = (): ListenTogetherPermissions | null =>
+  hostPermissions ? { ...hostPermissions } : null;
 
 /**
  * 主机模式：设置监听地址（绑定成功后由 server 调用）
@@ -220,6 +297,12 @@ export const updateMemberLatency = (id: string, latency: number): void => {
  */
 export const getMemberIds = (): string[] => Array.from(hostMembers.keys());
 
+/**
+ * 主机模式：取成员快照（用于构造 membersSync 广播）
+ */
+export const getMembersSnapshot = (): ListenTogetherMember[] =>
+  Array.from(hostMembers.values()).map((m) => ({ ...m }));
+
 // ─── 客户端模式 ─────────────────────────────────────────────────────
 
 /**
@@ -231,6 +314,14 @@ export const enterClientMode = (url: string): void => {
   clientHostName = null;
   clientLatency = 0;
   clientLastError = null;
+  clientMembers = [];
+  clientPermissions = null;
+  // 重置 current* 字段，避免上一次会话残留状态污染本次会话
+  currentTrack = null;
+  currentState = "idle";
+  currentPosition = 0;
+  currentQueue = [];
+  currentIndex = -1;
   role = "client";
   notifyStatus();
 };
@@ -244,6 +335,14 @@ export const exitClientMode = (error?: string): void => {
   clientHostName = null;
   clientLatency = 0;
   clientLastError = error ?? null;
+  clientMembers = [];
+  clientPermissions = null;
+  // 同步重置 current* 字段
+  currentTrack = null;
+  currentState = "idle";
+  currentPosition = 0;
+  currentQueue = [];
+  currentIndex = -1;
   if (role === "client") role = "idle";
   notifyStatus();
 };
@@ -266,6 +365,18 @@ export const setClientLastError = (error: string | null): void => {
   notifyStatus();
 };
 
+/** 客户端模式：写入主机同步过来的成员列表 */
+export const setClientMembers = (members: ListenTogetherMember[]): void => {
+  clientMembers = members.map((m) => ({ ...m }));
+  notifyStatus();
+};
+
+/** 客户端模式：写入主机下发的房客权限（welcome 时一次性写入） */
+export const setClientPermissions = (permissions: ListenTogetherPermissions | null): void => {
+  clientPermissions = permissions ? { ...permissions } : null;
+  notifyStatus();
+};
+
 // ─── 播放器事件钩子（主机端调用） ───────────────────────────────────
 
 /**
@@ -282,7 +393,20 @@ export const onHostTrackChange = (
   currentTrack = track;
   currentPosition = position;
   currentState = state;
-  // 主机广播由 server 模块订阅事件完成；这里只维护本地状态
+  // 同步更新 currentIndex：新曲目在队列中找到则指向它，找不到则归 -1
+  // （此前 idx<0 时保留旧 currentIndex，导致 currentTrack 与 currentIndex 不一致：
+  //   主机外部加载一首不在队列中的新曲 D 后，currentTrack=D 但 currentIndex 仍指向旧曲 A，
+  //   sliceQueue 按旧索引切片下发给客户端，客户端 UI 显示队列首 A 高亮却正在播 D）
+  if (track) {
+    const idx = currentQueue.findIndex(
+      (t) => String(t.id) === String(track.id) && t.source === track.source,
+    );
+    currentIndex = idx; // findIndex 未命中返回 -1，正是期望语义
+  } else {
+    currentIndex = -1;
+  }
+  // 通知主机本地 UI 刷新（广播由 server 模块负责）
+  notifyStatus();
 };
 
 /**
@@ -290,6 +414,8 @@ export const onHostTrackChange = (
  */
 export const onHostStateChange = (state: PlayerState): void => {
   currentState = state;
+  // 通知主机本地 UI 刷新（广播由 server 模块负责）
+  notifyStatus();
 };
 
 /**
@@ -297,6 +423,8 @@ export const onHostStateChange = (state: PlayerState): void => {
  */
 export const onHostSeek = (positionMs: number): void => {
   currentPosition = positionMs;
+  // 主机本地 UI 的进度条高频刷新由 player.ts 的 position 事件负责，
+  // 此处不主动 notifyStatus 避免高频通知；广播由 server 模块负责
 };
 
 /**
@@ -304,7 +432,12 @@ export const onHostSeek = (positionMs: number): void => {
  */
 export const onHostQueueUpdate = (queue: Track[], index: number): void => {
   currentQueue = queue;
-  currentIndex = queue.length === 0 ? -1 : Math.max(0, Math.min(index, queue.length - 1));
+  // 队列空或调用方传入 -1（语义为"队列更新但无当前曲"）时归 -1
+  // （此前 Math.max(0, -1) = 0，把 -1 强制变 0 指向队列第一首，与 setCurrentIndex 语义不一致）
+  currentIndex =
+    queue.length === 0 || index < 0 ? -1 : Math.min(index, queue.length - 1);
+  // 通知主机本地 UI 刷新队列展示
+  notifyStatus();
 };
 
 // ─── 客户端回放控制（客户端端调用，由 client.ts 触发） ───────────────
@@ -322,8 +455,14 @@ export const applyRemoteTrackChange = (
   state: "playing" | "paused",
 ): { track: Track | null; position: number; shouldPlay: boolean } => {
   if (!syncTrack) {
+    // 主机切到空曲目：必须同步清空 currentTrack/currentIndex，
+    // 此前仅重置 state/position 而 currentTrack 仍保留旧值，
+    // 导致客户端 UI 在主机停止后仍显示旧曲目（与主机状态不一致）
+    currentTrack = null;
+    currentIndex = -1;
     currentState = "paused";
     currentPosition = 0;
+    notifyStatus();
     return { track: null, position: 0, shouldPlay: false };
   }
   // 重建轻量 Track 供 player:load 使用；URL 解析在 client.ts 完成
@@ -338,6 +477,7 @@ export const applyRemoteTrackChange = (
   currentTrack = track;
   currentState = state === "playing" ? "playing" : "paused";
   currentPosition = position;
+  notifyStatus();
   return { track, position, shouldPlay: state === "playing" };
 };
 
@@ -346,6 +486,9 @@ export const applyRemoteTrackChange = (
  */
 export const applyRemoteStateChange = (state: "playing" | "paused"): void => {
   currentState = state === "playing" ? "playing" : "paused";
+  // 通知客户端 UI 刷新播放状态（playing ▶ / paused ⏸ 图标切换）
+  // 此前漏掉 notifyStatus，导致客户端收到 stateChange 后 UI 状态不更新
+  notifyStatus();
   try {
     const inst = getPlayer();
     if (state === "playing") inst.play();
@@ -447,7 +590,17 @@ export const getCurrentQueueSnapshot = () =>
  * 设置当前队列索引（主机端切歌时由 player.ts 通知）
  */
 export const setCurrentIndex = (index: number): void => {
-  currentIndex = index;
+  // 边界校验：负值或空队列归一为 -1；上限不超过队列长度-1
+  // （此前无校验，越界值会污染 sliceQueue 切片）
+  // （此前提前 return 跳过 notifyStatus，UI 不刷新；现统一在末尾通知）
+  const prevIndex = currentIndex;
+  if (currentQueue.length === 0 || index < 0) {
+    currentIndex = -1;
+  } else {
+    currentIndex = Math.min(index, currentQueue.length - 1);
+  }
+  // 仅在实际变化时通知，避免冗余刷新
+  if (prevIndex !== currentIndex) notifyStatus();
 };
 
 /**
@@ -455,7 +608,14 @@ export const setCurrentIndex = (index: number): void => {
  */
 export const setClientQueue = (tracks: Track[], index: number): void => {
   currentQueue = tracks;
-  currentIndex = index;
+  // 同样做边界归一，避免客户端拿到越界 index 后 sliceQueue 出错
+  if (tracks.length === 0 || index < 0) {
+    currentIndex = -1;
+  } else {
+    currentIndex = Math.min(index, tracks.length - 1);
+  }
+  // 通知 UI 刷新（此前漏掉 notifyStatus，导致客户端队列 UI 不更新）
+  notifyStatus();
 };
 
 // 协议版本号 re-export，便于 server / client 引用

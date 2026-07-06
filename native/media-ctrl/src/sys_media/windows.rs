@@ -13,6 +13,7 @@ use windows::{
         SystemMediaTransportControlsTimelineProperties,
     },
     Storage::Streams::{DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference},
+    Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID,
     core::{HSTRING, Ref},
 };
 
@@ -23,6 +24,10 @@ use crate::model::{
 };
 
 const HNS_PER_MS: f64 = 10_000.0;
+
+/// 应用 AUMID，与 electron-builder.config.ts 的 appId 保持一致；
+/// Electron 端 app.setAppUserModelId 已设置过，native 模块再次显式设置以确保 SMTC 关联
+const APP_AUMID: &str = "top.fantasy-xy808.soto-player-community";
 
 static TOKIO_RT: LazyLock<Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -130,6 +135,11 @@ impl WindowsImpl {
 
 impl SystemMediaControls for WindowsImpl {
     fn initialize(&self) -> Result<()> {
+        // 显式设置进程 AUMID，让 Windows 11 Quick Settings 中的 SMTC 能正确显示应用名，
+        // 避免在未注册快捷方式或开发模式下显示"未知应用"
+        let aumid = HSTRING::from(APP_AUMID);
+        let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(&aumid) };
+
         let player = MediaPlayer::new()?;
         let smtc = player.SystemMediaTransportControls()?;
 
@@ -225,7 +235,14 @@ impl SystemMediaControls for WindowsImpl {
     fn enable(&self) -> Result<()> {
         with_ctx(|ctx| {
             ctx.is_enabled = true;
-            Ok(ctx.smtc()?.SetIsEnabled(true)?)
+            let smtc = ctx.smtc()?;
+            smtc.SetIsEnabled(true)?;
+            // 立即初始化 DisplayUpdater 为 Music 类型，让 Windows 11 Quick Settings
+            // 能尽快把 SMTC 与本应用关联，避免在元数据推送前显示"未知应用"
+            let updater = smtc.DisplayUpdater()?;
+            updater.SetType(MediaPlaybackType::Music)?;
+            updater.Update()?;
+            Ok(())
         })
     }
 

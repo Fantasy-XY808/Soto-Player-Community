@@ -1,6 +1,7 @@
 import type {
   ListenTogetherDiscoveredSession,
   ListenTogetherLocalUser,
+  ListenTogetherPermissions,
   ListenTogetherStatus,
 } from "@shared/types/settings";
 
@@ -11,10 +12,17 @@ const DEFAULT_STATUS: ListenTogetherStatus = {
   hostPort: null,
   hasPassword: false,
   members: [],
+  clientMembers: [],
+  clientPermissions: null,
   clientUrl: null,
   hostName: null,
   latency: 0,
   lastError: null,
+  currentTrack: null,
+  currentState: "idle",
+  currentPosition: 0,
+  currentQueue: [],
+  currentIndex: -1,
 };
 
 /** 模块级单例状态：所有组件共享同一份订阅，避免重复 IPC */
@@ -100,15 +108,20 @@ export const useListenTogether = () => {
   const startHost = (
     name: string,
     password: string,
+    permissions: ListenTogetherPermissions,
   ): Promise<{ ok: boolean; address: string | null; error?: string }> =>
-    window.api.listenTogether.startHost(name, password);
+    window.api.listenTogether.startHost(name, password, permissions);
 
   /** 停止主机模式 */
   const stopHost = (): Promise<void> => window.api.listenTogether.stopHost();
 
-  /** 加入会话 */
-  const joinSession = (url: string, password: string): Promise<{ ok: boolean; error?: string }> =>
-    window.api.listenTogether.joinSession(url, password);
+  /** 加入会话（可选分享码：提供时自动启动 EasyTier 加入虚拟网络） */
+  const joinSession = (
+    url: string,
+    password: string,
+    shareCode?: string,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    window.api.listenTogether.joinSession(url, password, shareCode);
 
   /** 离开会话 */
   const leaveSession = (): Promise<void> => window.api.listenTogether.leaveSession();
@@ -116,6 +129,15 @@ export const useListenTogether = () => {
   /** 主机端：通知队列更新 */
   const notifyQueueUpdate = (queue: unknown[], currentIndex: number): void => {
     window.api.listenTogether.notifyQueueUpdate(queue as never, currentIndex);
+  };
+
+  /** 主机端：通知曲目切换（player:load 之外的冗余兜底通道） */
+  const notifyTrackChange = (
+    track: unknown,
+    position: number,
+    state: "playing" | "paused",
+  ): void => {
+    window.api.listenTogether.notifyTrackChange(track as never, position, state);
   };
 
   onMounted(() => {
@@ -140,5 +162,6 @@ export const useListenTogether = () => {
     startBrowse,
     stopBrowse,
     notifyQueueUpdate,
+    notifyTrackChange,
   };
 };

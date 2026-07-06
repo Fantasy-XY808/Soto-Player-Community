@@ -5,7 +5,7 @@ import { getArtistCacheDir } from "@main/utils/config";
 import { toCacheUrl } from "@main/utils/protocol";
 
 /** MusicBrainz User-Agent */
-const UA = "Soto-Player-Community/2.3.1 (https://github.com/Fantasy-XY808/Soto-Player-Community)";
+const UA = "Soto-Player-Community/2.3.6 (https://github.com/Fantasy-XY808/Soto-Player-Community)";
 
 /** 预取并发数 */
 const PREFETCH_CONCURRENCY = 2;

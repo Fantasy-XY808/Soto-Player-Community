@@ -100,12 +100,118 @@ export interface EqualizerSettings {
 /** 音频超分后端选择（与 Rust 侧 SuperResBackend::to_u8 对齐） */
 export type AudioSuperResolutionBackend = 0 | 1 | 2;
 
+/** 超分参数（与 Rust 侧 SuperResParams 对齐） */
+export interface SuperResParams {
+  /** 高通截止频率（Hz），默认 4500 */
+  hpFreq: number;
+  /** 高通 Q 值，默认 0.7 */
+  hpQ: number;
+  /** 一次谐波激励强度，默认 3.0 */
+  drive: number;
+  /** 二次谐波激励强度，默认 0.6 */
+  h2Drive: number;
+  /** 二次谐波混合比例，默认 0.08 */
+  h2Mix: number;
+  /** 湿信号混合比例，默认 0.40 */
+  wetMix: number;
+  /** 输入限幅（防止过载），默认 1.2 */
+  inputLimit: number;
+  /** A/B bypass：true 时跳过整个超分处理 */
+  bypass: boolean;
+}
+
 /** 音频超分配置 */
 export interface AudioSuperResolutionSettings {
   /** 是否启用超分（高频激励器），默认关闭 */
   enabled: boolean;
   /** 后端：0=CPU, 1=GPU, 2=NPU；GPU/NPU 不可用时回退到 CPU */
   backend: AudioSuperResolutionBackend;
+  /** 超分参数（高通/激励/混合等可调项） */
+  params: SuperResParams;
+}
+
+/** 低音增强配置（2 阶 low-shelf + tanh 软饱和 + subharmonic 生成） */
+export interface BassEnhancerSettings {
+  /** 是否启用 */
+  enabled: boolean;
+  /** 低频架桥截止频率（Hz），范围 [20, 500]，默认 100 */
+  freq: number;
+  /** 增益（dB），范围 [0, 15]，默认 9.0 */
+  gainDb: number;
+  /** Q 值，范围 [0.1, 2.0]，默认 0.7 */
+  q: number;
+  /** subharmonic 混合比例（0~1），范围 [0, 1]，默认 0.4；80Hz → 40Hz/20Hz 二阶谐波生成 */
+  harmonicsMix: number;
+  /** A/B bypass：true 时跳过处理 */
+  bypass: boolean;
+}
+
+/** 立体声展宽配置（Mid-Side 处理 + Cross-feed + 可选 HAAS） */
+export interface StereoWidenerSettings {
+  /** 是否启用 */
+  enabled: boolean;
+  /** 展宽系数，范围 [0.0, 2.0]，1.0 = 原始；>1 展宽，<1 收窄，默认 1.4 */
+  width: number;
+  /** Cross-feed 混合量，范围 [0.0, 0.5]，默认 0.2；耳机聆听时降低疲劳感 */
+  crossFeed: number;
+  /** HAAS 效应开关：true 时右声道延迟 8ms 制造空间感，默认 false */
+  haasEnabled: boolean;
+  /** A/B bypass：true 时跳过处理 */
+  bypass: boolean;
+}
+
+/** 响度归一化配置（500ms 滑动窗口 RMS + attack/release 平滑） */
+export interface LoudnessNormalizerSettings {
+  /** 是否启用 */
+  enabled: boolean;
+  /** 目标响度（LUFS），范围 [-30, 0]，默认 -10.0；母带级响度，配合超分/低音增强后仍有冲击力 */
+  targetLufs: number;
+  /** 最大增益（dB），范围 [0, 12]，默认 9.0 */
+  maxGainDb: number;
+  /** A/B bypass：true 时跳过处理 */
+  bypass: boolean;
+}
+
+/** 神经网络上采样后端选择（与 Rust 侧 NeuralBackend::to_u8 对齐） */
+export type NeuralUpsampleBackend = 0 | 1;
+
+/** 神经网络上采样参数（与 Rust 侧 NeuralUpsampleParams 对齐） */
+export interface NeuralUpsampleParams {
+  /** 输入增益（dB），范围 [-12, 12]，默认 0.0 */
+  inputGainDb: number;
+  /** 湿信号混合比例，范围 [0, 1]，默认 0.5 */
+  wetMix: number;
+  /** A/B bypass：true 时跳过处理 */
+  bypass: boolean;
+}
+
+/** 神经网络上采样配置（框架就绪 + 算法兜底：无 ONNX 模型时直通） */
+export interface NeuralUpsampleSettings {
+  /** 是否启用（启用后无模型时走算法兜底，直通不修改信号） */
+  enabled: boolean;
+  /** 后端：0=Fallback 算法兜底，1=ONNX Runtime；Onnx 后端仅在模型加载成功时才生效 */
+  backend: NeuralUpsampleBackend;
+  /** 已加载的 ONNX 模型路径（null = 未加载；用户在 UI 上选择文件后写入） */
+  modelPath: string | null;
+  /** 上采样参数 */
+  params: NeuralUpsampleParams;
+}
+
+/**
+ * 空间音频配置（组合预设：开启时同步配置 StereoWidener + BassEnhancer + SuperRes）
+ *
+ * 空间音频是一个"宏开关"——开启后用预设值一次性配置三个 DSP，制造包裹感；
+ * 关闭时三个 DSP 回落到各自独立配置。各子 DSP 的用户设置在 spatialAudio.enabled
+ * 期间被覆盖，关闭后恢复。
+ */
+export interface SpatialAudioSettings {
+  enabled: boolean;
+  width: number;
+  bassGainDb: number;
+  bassFreq: number;
+  superResDrive: number;
+  superResWetMix: number;
+  bypass: boolean;
 }
 
 /** 播放器配置 */
@@ -128,8 +234,20 @@ export interface PlayerSettings {
   equalizer: EqualizerSettings;
   /** 音频超分配置（高频激励器，提升高频细节） */
   audioSuperResolution: AudioSuperResolutionSettings;
+  /** 低音增强配置 */
+  bassEnhancer: BassEnhancerSettings;
+  /** 立体声展宽配置 */
+  stereoWidener: StereoWidenerSettings;
+  /** 响度归一化配置（多 DSP 串联后防削波；与全局 loudnessNormalization 互斥使用，本项更精细） */
+  loudnessNormalizer: LoudnessNormalizerSettings;
+  /** 神经网络上采样配置（ONNX 模型推理；无模型时直通） */
+  neuralUpsample: NeuralUpsampleSettings;
+  /** 空间音频配置（组合预设：开启时同步配置 StereoWidener + BassEnhancer + SuperRes） */
+  spatialAudio: SpatialAudioSettings;
   /** 按 `{Track.id}|{歌词源}` 记忆的歌词偏移（ms，正值为歌词提前）；为 0 时不写入 */
   lyricOffsets: Record<string, number>;
+  /** FFT 等响度补偿开关（BetterLyrics 风格：20Hz gain=1.0 → 20kHz gain=12.0 对数插值，强化高频视觉） */
+  fftEqualLoudness: boolean;
 }
 
 /** Discord 显示模式 */
@@ -270,6 +388,16 @@ export interface DynamicIslandSettings {
   maxWidth: number;
   /** 歌词超出时的处理方式 */
   overflowMode: IslandOverflowMode;
+  /** 自动隐藏：N 秒无交互后塌缩为隐藏坨儿（展开态/刘海融合态不触发） */
+  autoHide: boolean;
+  /** 自动隐藏延迟（秒） */
+  autoHideDelay: number;
+  /** 运动模糊：依据弹簧速度对根节点施加 filter:blur，与 WinIsland 渲染一致 */
+  motionBlur: boolean;
+  /** 全屏抑制：前台窗口全屏时隐藏灵动岛（仅 Windows/Linux 生效） */
+  suppressFullscreen: boolean;
+  /** 开机自启：跟随系统开机启动 SPlayer（控制整个应用，非仅灵动岛） */
+  autoStart: boolean;
 }
 
 /** 任务栏歌词位置模式 */
@@ -358,8 +486,18 @@ export type ListenTogetherProgressMode = "manual" | "interval" | "songOnly";
 /** 一起听队列同步模式 */
 export type ListenTogetherQueueMode = "currentOnly" | "currentAndNext" | "fullQueue";
 
+/** 一起听房客权限（主机端配置，随 welcome 下发给客户端） */
+export interface ListenTogetherPermissions {
+  /** 房客是否可以暂停/播放 */
+  allowClientPause: boolean;
+  /** 房客是否可以切歌（上一首/下一首） */
+  allowClientSkip: boolean;
+  /** 房客是否可以编辑播放列表 */
+  allowClientEditQueue: boolean;
+}
+
 /** 一起听配置 */
-export interface ListenTogetherSettings {
+export interface ListenTogetherSettings extends ListenTogetherPermissions {
   /** 总开关；关闭后侧边栏隐藏入口 */
   enabled: boolean;
   /** 监听端口（主机模式时绑定） */
@@ -374,6 +512,12 @@ export interface ListenTogetherSettings {
   autoReconnect: boolean;
   /** 上次连接的主机地址（用于快速重连，不含口令） */
   lastHostUrl: string;
+  /** 是否启用 EasyTier P2P 内网穿透 */
+  easyTierEnabled: boolean;
+  /** EasyTier 网络名（空值时使用默认名 splayer） */
+  easyTierNetworkName: string;
+  /** EasyTier 网络密钥（可选，用于私有网络） */
+  easyTierNetworkSecret: string;
 }
 
 /** 一起听会话角色 */
@@ -385,10 +529,20 @@ export interface ListenTogetherMember {
   id: string;
   /** 显示名称 */
   name: string;
-  /** 网易云级别 */
-  level: "default" | "vip" | "svip";
+  /** 网易云级别（不暴露 svip，统一映射为 vip） */
+  level: "default" | "vip";
   /** 单向延迟（毫秒，RTT/2） */
   latency: number;
+}
+
+/** 一起听：跨进程同步的曲目展示信息（与 protocol.SyncTrack 等价，独立定义以解耦） */
+export interface ListenTogetherCurrentTrack {
+  id: string;
+  source: "netease" | "qqmusic" | "kugou" | "local";
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
 }
 
 /** 一起听运行时状态 */
@@ -403,6 +557,10 @@ export interface ListenTogetherStatus {
   hasPassword: boolean;
   /** 主机模式：已连接成员列表 */
   members: ListenTogetherMember[];
+  /** 客户端模式：主机同步过来的成员列表（含自己） */
+  clientMembers: ListenTogetherMember[];
+  /** 客户端模式：主机下发的房客权限（未握手前为 null） */
+  clientPermissions: ListenTogetherPermissions | null;
   /** 客户端模式：连接的主机 URL */
   clientUrl: string | null;
   /** 客户端模式：主机名称 */
@@ -411,6 +569,16 @@ export interface ListenTogetherStatus {
   latency: number;
   /** 客户端模式：最近一次错误（用于 UI 提示） */
   lastError: string | null;
+  /** 当前曲目（用于 UI 显示当前播放；主机与客户端共用，空闲态为 null） */
+  currentTrack: ListenTogetherCurrentTrack | null;
+  /** 当前播放状态（与 PlayerState 不同，简化为 playing/paused/idle） */
+  currentState: "playing" | "paused" | "idle";
+  /** 当前位置（毫秒） */
+  currentPosition: number;
+  /** 当前队列（主机模式为完整队列，客户端模式为按 queueMode 切片） */
+  currentQueue: ListenTogetherCurrentTrack[];
+  /** 当前曲在队列中的索引（-1 表示无） */
+  currentIndex: number;
 }
 
 /** 一起听：本地账号信息（查询网易云登录态后获得） */
@@ -553,6 +721,62 @@ export interface AppUpdateSettings {
 /** 网易云听歌打卡上报方式 */
 export type NeteaseScrobbleMode = "legacy" | "ncbl";
 
+/** 代理协议；off=关闭代理 */
+export type ProxyProtocol = "off" | "http" | "https" | "socks";
+
+/** HTTP/HTTPS/SOCKS 代理配置 */
+export interface ProxySettings {
+  /** 协议；off=关闭代理 */
+  protocol: ProxyProtocol;
+  /** 主机名 */
+  host: string;
+  /** 端口 */
+  port: number;
+  /** 用户名（可选） */
+  username: string;
+  /** 密码（可选） */
+  password: string;
+}
+
+/** Automix 调式匹配模式 */
+export type AutomixKeyMatchMode = "off" | "camelot" | "strict";
+
+/** Automix 选取下一首策略 */
+export type AutomixPickStrategy = "bpm" | "key" | "bpmKey" | "random";
+
+/** Automix 配置 */
+export interface AutomixSettings {
+  /** 总开关 */
+  enabled: boolean;
+  /** 触发 crossfade 的提前量（毫秒，500-12000） */
+  crossfadeMs: number;
+  /** BPM 匹配容差（BPM，0-30；0 表示不限制） */
+  bpmTolerance: number;
+  /** 调式匹配模式 */
+  keyMatchMode: AutomixKeyMatchMode;
+  /** 选取策略 */
+  strategy: AutomixPickStrategy;
+  /** 候选池大小（从队列尾部向前取 N 首作为候选） */
+  candidatePoolSize: number;
+  /** 是否启用渐入渐出切换（false 为直接切） */
+  crossfadeEnabled: boolean;
+  /** 自动分析未分析过的曲目 */
+  autoAnalyze: boolean;
+  /** 候选池耗尽时是否自动从当前曲目相似度推荐（暂未实现，预留） */
+  autoRecommend: boolean;
+}
+
+/** 解灰音源标识（与 unblock/types.ts 的 SongUnlockServerKey 同步） */
+export type SongUnlockServerKey = "netease" | "kuwo" | "bodian";
+
+/** 解灰源配置项 */
+export interface SongUnlockServerConfig {
+  /** 源标识 */
+  key: SongUnlockServerKey;
+  /** 是否启用 */
+  enabled: boolean;
+}
+
 /** 后端配置汇总 */
 export interface SystemConfig {
   /** 播放器配置 */
@@ -585,6 +809,8 @@ export interface SystemConfig {
   listenTogether: ListenTogetherSettings;
   /** 应用更新配置 */
   update: AppUpdateSettings;
+  /** Automix 自动混音配置 */
+  automix: AutomixSettings;
   /** 系统配置 */
   system: {
     /** 记忆窗口状态 */
@@ -603,6 +829,12 @@ export interface SystemConfig {
     neteaseScrobbleMode: NeteaseScrobbleMode;
     /** 注册为 Orpheus 协议处理程序，抢占网页端「用客户端打开」 */
     registerOrpheusProtocol: boolean;
+    /** HTTP/HTTPS/SOCKS 代理配置 */
+    proxy: ProxySettings;
+    /** 播放时阻止系统进入休眠/屏幕熄灭 */
+    preventSleep: boolean;
+    /** 解灰源（UnblockNeteaseMusic）配置列表；按顺序尝试启用的源 */
+    songUnlockServer: SongUnlockServerConfig[];
   };
   /** 窗口几何状态（运行时自动记录，非用户主动配置） */
   windowStates: WindowStates;

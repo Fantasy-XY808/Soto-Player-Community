@@ -9,12 +9,16 @@ use rodio::Sink;
 use tracing::{debug, info};
 
 use crate::audio_output::AudioOutput;
+use crate::bass_enhancer::{BassEnhancer, BassEnhancerParams};
 use crate::decoder;
 use crate::equalizer::{BandParams, Equalizer, FilterType};
 use crate::fft::FftAnalyzer;
+use crate::loudness_normalizer::{LoudnessNormalizer, LoudnessNormalizerParams};
+use crate::neural_upsample::{NeuralBackend, NeuralUpsample, NeuralUpsampleParams};
 use crate::shared::{AudioMetadata, Shared};
 use crate::source::DecoderSource;
-use crate::super_resolution::{SuperResBackend, SuperResolution};
+use crate::stereo_widener::{StereoWidener, StereoWidenerParams};
+use crate::super_resolution::{SuperResBackend, SuperResParams, SuperResolution};
 use crate::tempo::StretchProcessor;
 
 /// 播放器推送给 JS 侧的事件类型
@@ -123,6 +127,18 @@ pub struct InnerPlayer {
     /// 跨曲目共享的音频超分处理器（load/seek 时 Arc::clone 给 DecoderSource）
     /// 关闭时零开销 early return；开启时按声道应用高通 + 软削波 + 湿混合
     super_res: Arc<SuperResolution>,
+    /// 跨曲目共享的低音增强处理器（load/seek 时 Arc::clone 给 DecoderSource）
+    /// DSP 链位置：super_res 之后、stereo_widener 之前
+    bass_enhancer: Arc<BassEnhancer>,
+    /// 跨曲目共享的立体声展宽处理器（load/seek 时 Arc::clone 给 DecoderSource）
+    /// DSP 链位置：bass_enhancer 之后、loudness_normalizer 之前
+    stereo_widener: Arc<StereoWidener>,
+    /// 跨曲目共享的响度归一化处理器（load/seek 时 Arc::clone 给 DecoderSource）
+    /// DSP 链位置：stereo_widener 之后、tempo 之前；用于多 DSP 串联后防止削波
+    loudness_normalizer: Arc<LoudnessNormalizer>,
+    /// 跨曲目共享的神经网络上采样处理器（load/seek 时 Arc::clone 给 DecoderSource）
+    /// DSP 链位置：loudness_normalizer 之后、tempo 之前；当前为框架阶段（无模型时直通）
+    neural_upsample: Arc<NeuralUpsample>,
     /// load 单调递增 token：每次 take_for_async_load 自增一次
     /// commit_loaded 比对 token 与最新值，不一致则该次加载已被新加载取代，需丢弃
     /// 用于防止快速切歌时旧 IO 完成后覆盖新音频的竞态
@@ -210,14 +226,25 @@ impl InnerPlayer {
             .unwrap_or(decoder::TARGET_SAMPLE_RATE)
     }
 
-    /// 把 EQ / stretch / 超分的采样率对齐到当前输出设备率
+    /// 实际进入 DSP 链的采样率：源率不低于 48k，受 MAX_DSP_SAMPLE_RATE 上限约束
+    /// UI 据此显示"真实工作采样率"——96k/192k Hi-Res 不会被强制降到 48k
+    pub fn effective_sample_rate(&self) -> u32 {
+        decoder::effective_sample_rate(self.audio_sample_rate, self.output_sample_rate())
+    }
+
+    /// 把 EQ / stretch / 超分 / 低音增强 / 立体声展宽 / 响度归一化 / 神经网络上采样的采样率对齐到当前输出设备率
     /// 设备切换（reinit_output → load）后纠正系数，避免 EQ 频点 / 变调音高 / 超分高通偏移
     /// 调用前须保证 output 已就绪
     fn configure_dsp_sample_rate(&self) {
         let rate = self.output_sample_rate();
         self.equalizer.lock().set_sample_rate(rate);
         self.tempo.lock().set_sample_rate(rate);
-        self.super_res.set_sample_rate(rate as f32);
+        let rate_f = rate as f32;
+        self.super_res.set_sample_rate(rate_f);
+        self.bass_enhancer.set_sample_rate(rate_f);
+        self.stereo_widener.set_sample_rate(rate_f);
+        self.loudness_normalizer.set_sample_rate(rate_f);
+        self.neural_upsample.set_sample_rate(rate_f);
     }
 
     pub fn new() -> Result<Self> {
@@ -263,6 +290,10 @@ impl InnerPlayer {
                 initial_rate,
             ))),
             super_res: Arc::new(SuperResolution::new()),
+            bass_enhancer: Arc::new(BassEnhancer::new()),
+            stereo_widener: Arc::new(StereoWidener::new()),
+            loudness_normalizer: Arc::new(LoudnessNormalizer::new()),
+            neural_upsample: Arc::new(NeuralUpsample::new()),
             load_token: Arc::new(AtomicU64::new(0)),
         })
     }
@@ -567,6 +598,10 @@ impl InnerPlayer {
         self.equalizer.lock().reset_state();
         self.tempo.lock().reset();
         self.super_res.reset_state();
+        self.bass_enhancer.reset_state();
+        self.stereo_widener.reset_state();
+        self.loudness_normalizer.reset_state();
+        self.neural_upsample.reset_state();
 
         let old_threads = OldThreads {
             decoder_thread: self.decoder_thread.take(),
@@ -664,6 +699,10 @@ impl InnerPlayer {
         self.equalizer.lock().reset_state();
         self.tempo.lock().reset();
         self.super_res.reset_state();
+        self.bass_enhancer.reset_state();
+        self.stereo_widener.reset_state();
+        self.loudness_normalizer.reset_state();
+        self.neural_upsample.reset_state();
 
         let decoder_source = DecoderSource::new(
             Arc::clone(&shared),
@@ -671,6 +710,10 @@ impl InnerPlayer {
             Arc::clone(&self.equalizer),
             Arc::clone(&self.tempo),
             Arc::clone(&self.super_res),
+            Arc::clone(&self.bass_enhancer),
+            Arc::clone(&self.stereo_widener),
+            Arc::clone(&self.loudness_normalizer),
+            Arc::clone(&self.neural_upsample),
             self.audio_sample_rate,
             self.audio_channels,
         );
@@ -743,6 +786,10 @@ impl InnerPlayer {
             Arc::clone(&self.equalizer),
             Arc::clone(&self.tempo),
             Arc::clone(&self.super_res),
+            Arc::clone(&self.bass_enhancer),
+            Arc::clone(&self.stereo_widener),
+            Arc::clone(&self.loudness_normalizer),
+            Arc::clone(&self.neural_upsample),
             metadata.sample_rate,
             metadata.channels,
         );
@@ -795,6 +842,9 @@ impl InnerPlayer {
         // 切歌时清空超分高通状态，避免上一首尾音谐波残留
         self.super_res.reset_state();
 
+        // 神经网络上采样：当前框架阶段无状态可重置，调用占位
+        self.neural_upsample.reset_state();
+
         // 先确保音频输出就绪（无设备时在此报错，不影响解码），再按设备原生采样率
         // 对齐 DSP 并创建 Shared——Shared.sample_rate 即解码侧的播放重采样目标
         self.ensure_output()?;
@@ -816,6 +866,10 @@ impl InnerPlayer {
             Arc::clone(&self.equalizer),
             Arc::clone(&self.tempo),
             Arc::clone(&self.super_res),
+            Arc::clone(&self.bass_enhancer),
+            Arc::clone(&self.stereo_widener),
+            Arc::clone(&self.loudness_normalizer),
+            Arc::clone(&self.neural_upsample),
             metadata.sample_rate,
             metadata.channels,
         );
@@ -1038,6 +1092,10 @@ impl InnerPlayer {
         self.tempo.lock().reset();
         // seek 时也清空超分高通状态，避免 seek 后瞬态谐波堆积
         self.super_res.reset_state();
+        self.bass_enhancer.reset_state();
+        self.stereo_widener.reset_state();
+        self.loudness_normalizer.reset_state();
+        self.neural_upsample.reset_state();
 
         let decoder_source = DecoderSource::new(
             Arc::clone(&shared),
@@ -1045,6 +1103,10 @@ impl InnerPlayer {
             Arc::clone(&self.equalizer),
             Arc::clone(&self.tempo),
             Arc::clone(&self.super_res),
+            Arc::clone(&self.bass_enhancer),
+            Arc::clone(&self.stereo_widener),
+            Arc::clone(&self.loudness_normalizer),
+            Arc::clone(&self.neural_upsample),
             self.audio_sample_rate,
             self.audio_channels,
         );
@@ -1292,10 +1354,20 @@ impl InnerPlayer {
         self.tempo.lock().pitch_sync()
     }
 
-    /// 配置音频超分：开关 + 后端选择
+    /// 配置音频超分：开关 + 后端选择 + 参数
     /// GPU/NPU 后端当前回退到 CPU，effective_backend 反映真实生效后端
-    pub fn set_super_resolution(&self, enabled: bool, backend: SuperResBackend) {
-        self.super_res.configure(enabled, backend);
+    pub fn set_super_resolution(&self, enabled: bool, backend: SuperResBackend, params: SuperResParams) {
+        self.super_res.configure(enabled, backend, params);
+    }
+
+    /// 仅更新超分参数（不改变 enabled / backend）
+    pub fn set_super_resolution_params(&self, params: SuperResParams) {
+        self.super_res.set_params(params);
+    }
+
+    /// 取当前超分参数副本
+    pub fn super_resolution_params(&self) -> SuperResParams {
+        self.super_res.params()
     }
 
     /// 获取音频超分当前生效后端
@@ -1306,5 +1378,102 @@ impl InnerPlayer {
     /// 获取音频超分开关状态
     pub fn super_resolution_enabled(&self) -> bool {
         self.super_res.enabled()
+    }
+
+    /// 配置低音增强：开关 + 参数
+    pub fn set_bass_enhancer(&self, enabled: bool, params: BassEnhancerParams) {
+        self.bass_enhancer.configure(enabled, params);
+    }
+
+    /// 仅更新低音增强参数
+    pub fn set_bass_enhancer_params(&self, params: BassEnhancerParams) {
+        self.bass_enhancer.set_params(params);
+    }
+
+    /// 取当前低音增强参数
+    pub fn bass_enhancer_params(&self) -> BassEnhancerParams {
+        self.bass_enhancer.params()
+    }
+
+    /// 获取低音增强开关状态
+    pub fn bass_enhancer_enabled(&self) -> bool {
+        self.bass_enhancer.enabled()
+    }
+
+    /// 配置立体声展宽：开关 + 参数
+    pub fn set_stereo_widener(&self, enabled: bool, params: StereoWidenerParams) {
+        self.stereo_widener.configure(enabled, params);
+    }
+
+    /// 仅更新立体声展宽参数
+    pub fn set_stereo_widener_params(&self, params: StereoWidenerParams) {
+        self.stereo_widener.set_params(params);
+    }
+
+    /// 取当前立体声展宽参数
+    pub fn stereo_widener_params(&self) -> StereoWidenerParams {
+        self.stereo_widener.params()
+    }
+
+    /// 获取立体声展宽开关状态
+    pub fn stereo_widener_enabled(&self) -> bool {
+        self.stereo_widener.enabled()
+    }
+
+    /// 配置响度归一化：开关 + 参数
+    pub fn set_loudness_normalizer(&self, enabled: bool, params: LoudnessNormalizerParams) {
+        self.loudness_normalizer.configure(enabled, params);
+    }
+
+    /// 仅更新响度归一化参数
+    pub fn set_loudness_normalizer_params(&self, params: LoudnessNormalizerParams) {
+        self.loudness_normalizer.set_params(params);
+    }
+
+    /// 取当前响度归一化参数
+    pub fn loudness_normalizer_params(&self) -> LoudnessNormalizerParams {
+        self.loudness_normalizer.params()
+    }
+
+    /// 获取响度归一化开关状态
+    pub fn loudness_normalizer_enabled(&self) -> bool {
+        self.loudness_normalizer.enabled()
+    }
+
+    /// 配置神经网络上采样：开关 + 后端 + 参数
+    /// Onnx 后端仅在模型加载成功时才生效，否则回退到 Fallback
+    pub fn set_neural_upsample(&self, enabled: bool, backend: NeuralBackend, params: NeuralUpsampleParams) {
+        self.neural_upsample.configure(enabled, backend, params);
+    }
+
+    /// 仅更新神经网络上采样参数（不改变 enabled / backend）
+    pub fn set_neural_upsample_params(&self, params: NeuralUpsampleParams) {
+        self.neural_upsample.set_params(params);
+    }
+
+    /// 取当前神经网络上采样参数
+    pub fn neural_upsample_params(&self) -> NeuralUpsampleParams {
+        self.neural_upsample.params()
+    }
+
+    /// 获取神经网络上采样当前生效后端
+    pub fn neural_upsample_effective_backend(&self) -> NeuralBackend {
+        self.neural_upsample.effective_backend()
+    }
+
+    /// 获取神经网络上采样开关状态
+    pub fn neural_upsample_enabled(&self) -> bool {
+        self.neural_upsample.enabled()
+    }
+
+    /// 尝试加载 ONNX 模型
+    /// 加载成功后 OnceLock 锁定，后续调用直接返回首次结果
+    pub fn load_neural_model(&self, path: &str) -> Result<(), String> {
+        self.neural_upsample.try_load_model(path)
+    }
+
+    /// 取已加载的 ONNX 模型路径
+    pub fn neural_model_path(&self) -> Option<String> {
+        self.neural_upsample.model_path()
     }
 }

@@ -9,6 +9,8 @@ import { useCopyText } from "@/composables/useCopyText";
 import { toast } from "@/composables/useToast";
 import { buildDownloadQualityItems } from "@/composables/useDownload";
 import { getShareUrl } from "@/utils/format/shareUrl";
+import { navigateToMv } from "@/utils/navigate";
+import { netease as neteaseApi } from "@/apis/netease";
 import IconPlay from "~icons/lucide/play";
 import IconListEnd from "~icons/lucide/list-end";
 import IconListPlus from "~icons/lucide/list-plus";
@@ -21,6 +23,7 @@ import IconListMinus from "~icons/lucide/list-minus";
 import IconCloudOff from "~icons/lucide/cloud-off";
 import IconSearch from "~icons/lucide/search";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
+import IconVideo from "~icons/lucide/video";
 
 export interface TrackMenuOptions {
   /** 集合类型 */
@@ -137,6 +140,12 @@ export const useTrackMenu = (
         separator: true,
       },
       {
+        key: "viewMv",
+        label: t("songList.context.viewMv"),
+        icon: markRaw(IconVideo),
+        show: source === "netease",
+      },
+      {
         key: "more",
         label: t("songList.context.more"),
         icon: markRaw(IconMoreHorizontal),
@@ -162,6 +171,26 @@ export const useTrackMenu = (
       },
     ];
   });
+
+  /**
+   * 查看歌曲关联的 MV
+   * 调用 song_mv_dynamic 接口查询 songId 对应的 mvId，存在则跳转 MV 详情页
+   * @param track - 当前操作的歌曲
+   */
+  const onViewMv = async (track: Track): Promise<void> => {
+    try {
+      const body = await neteaseApi.song_mv_dynamic<{ mvid?: number }>({ songid: track.id });
+      const mvId = body?.mvid;
+      if (!mvId || mvId <= 0) {
+        toast.info(t("songList.toast.noMv"));
+        return;
+      }
+      navigateToMv(String(mvId), { name: track.title });
+    } catch (err) {
+      console.warn("[useTrackMenu] view mv failed:", err);
+      toast.info(t("songList.toast.noMv"));
+    }
+  };
 
   const handleSelect = async (key: string): Promise<void> => {
     const current = track.value;
@@ -203,6 +232,9 @@ export const useTrackMenu = (
         break;
       case "searchSame":
         router.push({ path: "/search", query: { q: current.title } });
+        break;
+      case "viewMv":
+        await onViewMv(current);
         break;
       case "copyTitle":
         await copy(current.title);

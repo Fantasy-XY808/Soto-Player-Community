@@ -7,6 +7,7 @@ import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import * as songPreload from "@/services/songPreload";
 import * as playStats from "./stats";
 import {
   hasReachedSeekTarget,
@@ -66,6 +67,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       abLoop.checkLoop(adjusted);
       // 推进延时缓存调度
       cacheScheduler.tick(adjusted);
+      // 预加载下一首歌曲的 URL
+      songPreload.tryPreloadNext(adjusted, event.data.duration);
       break;
     }
     case "fftData":

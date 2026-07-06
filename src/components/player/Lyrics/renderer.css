@@ -30,8 +30,9 @@
   font-size: inherit;
   font-weight: inherit;
   transform-origin: left;
-  /* opacity 统一为 1，透明度由 --ba / --da mask 控制，保证歌词清晰锐利 */
-  opacity: 1;
+  /* opacity 由 --pass 控制：hidePassedLines 启用时已播放行 pass=0 整行淡出；
+     active 行与未播放行 pass=1 保持可见 */
+  opacity: var(--pass, 1);
   contain: content;
   pointer-events: none;
   --ba: 0.3;
@@ -240,6 +241,11 @@
   /* 扇形模式行宽限制，避免长行超出视口 */
   max-width: 80%;
   text-align: center;
+  /* 扇形模式压缩行内 padding，让 fanLineHeight 真正控制行距；
+     默认 0.4em 上下 padding 会让 offsetHeight ≈ 96px，
+     导致引擎 Math.max(fanLineHeight, offsetHeight) 始终取 offsetHeight，
+     用户调小 fanLineHeight 无效 */
+  padding: 0.1em 0.6em;
 }
 
 .lp-fan-mode .lp-line.duet {
@@ -251,9 +257,10 @@
   margin: 0 auto;
 }
 
-/* 扇形底框背景（::after 避免与悬停 ::before 冲突）
- * 默认不显示，仅 hover 时显示；active 行 hover 时底框更深 */
-.lp-fan-bg .lp-content::after {
+/* 行底框背景（::after 避免与悬停 ::before 冲突）
+ * 默认不显示，仅 hover 时显示；active 行 hover 时底框更深
+ * 对所有 layoutMode（默认/扇形）生效，由 fanLyricsEnableBackground 开关控制 */
+.lp-line-bg .lp-content::after {
   content: "";
   position: absolute;
   inset: -0.2em -0.6em;
@@ -267,24 +274,30 @@
     background 0.3s ease;
 }
 
-.lp-fan-bg .lp-line.active .lp-content::after {
+.lp-line-bg .lp-line.active .lp-content::after {
   background: color-mix(in srgb, var(--lp-color, #fff) 22%, transparent);
 }
 
-/* 扇形模式禁用 ::before 的 hover 背景，避免与底框冲突 */
-.lp-fan-mode .lp-line:not(.bg) .lp-content:hover::before {
+/* 激活行始终显示底框（不依赖 hover），由 fanLyricsAlwaysShowActiveBg 开关控制 */
+.lp-line-active-bg .lp-line.active .lp-content::after {
+  opacity: 1;
+}
+
+/* 启用底框时禁用 ::before 的 hover 背景，避免与底框冲突 */
+.lp-line-bg .lp-line:not(.bg) .lp-content:hover::before {
   opacity: 0;
 }
 
 /* hover 时显示底框 */
 @media (hover: hover) and (pointer: fine) {
-  .lp-fan-mode .lp-line:not(.bg) .lp-content:hover::after {
+  .lp-line-bg .lp-line:not(.bg) .lp-content:hover::after {
     opacity: 1;
   }
 }
 
-/* 扇形模式长音节光辉（基于 .lp-emp-wrapper 字符级 span，仅激活行） */
-.lp-fan-glow .lp-line.active .lp-emp-wrapper > span {
+/* 长音节光辉（基于 .lp-emp-wrapper 字符级 span，仅激活行）
+ * 对所有 layoutMode 生效，由 fanLyricsEnableGlow 开关控制 */
+.lp-line-glow .lp-line.active .lp-emp-wrapper > span {
   text-shadow:
     0 0 0.2em color-mix(in srgb, var(--lp-color, #fff) 60%, transparent),
     0 0 0.4em color-mix(in srgb, var(--lp-color, #fff) 40%, transparent);

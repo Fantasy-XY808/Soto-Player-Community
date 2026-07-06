@@ -59,6 +59,7 @@ import cloud_lyric_get from "./cloud_lyric_get";
 import song_detail from "./song_detail";
 import song_url from "./song_url";
 import song_download_url from "./song_download_url";
+import song_mv_dynamic from "./song_mv_dynamic";
 import playmode_intelligence from "./playmode_intelligence";
 import personal_fm from "./personal_fm";
 import fm_trash from "./fm_trash";
@@ -84,10 +85,18 @@ import mv_first from "./mv_first";
 import mv_detail from "./mv_detail";
 import mv_url from "./mv_url";
 
+// 视频
+import video_detail from "./video_detail";
+import video_url from "./video_url";
+import video_category_list from "./video_category_list";
+import video_group_list from "./video_group_list";
+
 // 电台 / 播客
 import dj_recommend from "./dj_recommend";
 import dj_category_recommend from "./dj_category_recommend";
 import dj_detail from "./dj_detail";
+import dj_program from "./dj_program";
+import dj_program_url from "./dj_program_url";
 
 // 歌单 / 喜欢
 import playlist_detail from "./playlist_detail";
@@ -170,6 +179,7 @@ export const modules: Record<string, NeteaseModule> = {
   song_detail,
   song_url,
   song_download_url,
+  song_mv_dynamic,
   playmode_intelligence,
   personal_fm,
   fm_trash,
@@ -193,9 +203,16 @@ export const modules: Record<string, NeteaseModule> = {
   mv_detail,
   mv_url,
 
+  video_detail,
+  video_url,
+  video_category_list,
+  video_group_list,
+
   dj_recommend,
   dj_category_recommend,
   dj_detail,
+  dj_program,
+  dj_program_url,
 
   playlist_detail,
   playlist_create,

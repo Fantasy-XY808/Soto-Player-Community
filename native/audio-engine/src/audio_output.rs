@@ -17,8 +17,14 @@ use std::thread::{self, JoinHandle};
 
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::{SampleFormat, SampleRate, SupportedStreamConfig};
 use rodio::{OutputStream, OutputStreamHandle};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
+
+/// Hi-Res 输出采样率偏好（Hz）：尝试 192kHz，其次 96kHz，最低 48kHz
+const HIGH_RATE_PREFERENCE: &[u32] = &[192_000, 96_000];
+/// 输出采样率上限（Hz）：超过此值的设备配置不再考虑，避免 DSP 链过载
+const OUTPUT_RATE_CAP: u32 = 192_000;
 
 /// 持有音频输出的跨线程句柄。`Send`，可放进 `InnerPlayer` 而不需 `unsafe impl Send`。
 ///
@@ -129,8 +135,13 @@ impl Drop for AudioOutput {
 /// 构建 cpal/rodio 输出流；**仅在 `audio-output-owner` 线程内调用**，
 /// 保证 `OutputStream` 的创建、持有和 drop 都发生在同一线程上
 ///
-/// 返回的采样率为设备 `default_output_config` 的采样率——正是 rodio 内部
-/// `try_from_device` / `try_default` 打开 stream 所用的值，用作播放重采样目标
+/// 采样率选择策略（按 Hi-Res 优先级降序尝试）：
+/// 1. 设备支持的 192kHz / 96kHz（受 OUTPUT_RATE_CAP 上限约束）—— Hi-Res 设备直出，
+///    避免 rodio 内部 UniformSourceIterator 把 96k/192k 源下采样到设备默认率
+/// 2. 设备默认输出配置（通常 44.1k / 48k）
+/// 3. 任意可打开的设备配置
+///
+/// 返回的采样率为 stream 实际打开的采样率，作为播放重采样目标
 fn build_output_stream(
     device_name: Option<&str>,
 ) -> Result<(OutputStream, OutputStreamHandle, u32)> {
@@ -142,36 +153,115 @@ fn build_output_stream(
                 .context("Failed to enumerate output devices")?
                 .find(|d| d.name().map(|got| got == name).unwrap_or(false))
                 .with_context(|| format!("Output device '{}' not found", name))?;
-            let sample_rate = device_sample_rate(&device);
-            let (stream, handle) =
-                OutputStream::try_from_device(&device).context("Failed to open named output device")?;
-            Ok((stream, handle, sample_rate))
+            open_device_best(&device)
         }
         None => open_default_stream(&host),
     }
 }
 
-/// 记录到"打不开的默认设备"的采样率，导致 rodio 内部又按真实设备率重采样
+/// 按高采样率优先策略打开设备：尝试 192kHz → 96kHz → 设备默认配置
+/// 任何一步打开成功即返回；高采样率全部失败时回退到 `try_from_device`（设备默认配置）
+fn open_device_best(
+    device: &cpal::Device,
+) -> Result<(OutputStream, OutputStreamHandle, u32)> {
+    if let Some((stream, handle, rate)) = try_open_high_rate(device) {
+        return Ok((stream, handle, rate));
+    }
+    let (stream, handle) = OutputStream::try_from_device(device)
+        .context("Failed to open output device with default config")?;
+    let sample_rate = device_sample_rate(device);
+    Ok((stream, handle, sample_rate))
+}
+
+/// 默认设备打开流程：高采样率 → 默认配置 → 枚举其它设备
 fn open_default_stream(host: &cpal::Host) -> Result<(OutputStream, OutputStreamHandle, u32)> {
     let default_device = host
         .default_output_device()
         .context("No default output device")?;
+
+    if let Some((stream, handle, rate)) = try_open_high_rate(&default_device) {
+        return Ok((stream, handle, rate));
+    }
     if let Ok((stream, handle)) = OutputStream::try_from_device(&default_device) {
         let sample_rate = device_sample_rate(&default_device);
         return Ok((stream, handle, sample_rate));
     }
 
-    // 默认设备打不开：遍历其它设备，打开成功的那个用它自身的采样率
+    // 默认设备完全打不开：遍历其它设备，按高采样率优先尝试
     let devices = host
         .output_devices()
         .context("Failed to enumerate output devices")?;
     for device in devices {
+        if let Some((stream, handle, rate)) = try_open_high_rate(&device) {
+            return Ok((stream, handle, rate));
+        }
         if let Ok((stream, handle)) = OutputStream::try_from_device(&device) {
             let sample_rate = device_sample_rate(&device);
             return Ok((stream, handle, sample_rate));
         }
     }
     anyhow::bail!("No usable output device")
+}
+
+/// 尝试用设备支持的高采样率（192kHz / 96kHz，受 OUTPUT_RATE_CAP 约束）打开 stream
+/// 找不到匹配配置或打开失败时返回 None，调用方按需回退到默认配置
+fn try_open_high_rate(
+    device: &cpal::Device,
+) -> Option<(OutputStream, OutputStreamHandle, u32)> {
+    let config = pick_high_sample_rate_config(device)?;
+    let rate = config.sample_rate().0;
+    match OutputStream::try_from_device_config(device, config) {
+        Ok((stream, handle)) => {
+            info!(
+                device = ?device.name(),
+                sample_rate = rate,
+                "设备以 Hi-Res 采样率打开"
+            );
+            Some((stream, handle, rate))
+        }
+        Err(e) => {
+            debug!(
+                error = %e,
+                "Hi-Res 采样率打开失败，回退到设备默认配置",
+            );
+            None
+        }
+    }
+}
+
+/// 在设备支持的配置里找最高的可用采样率（偏好 192kHz，其次 96kHz，最低 48kHz 不在此处处理）
+///
+/// 仅考虑立体声 f32 配置，与 DSP 链输出格式匹配，避免 rodio 内部做声道/格式转换
+/// 返回第一个匹配的 SupportedStreamConfig；找不到返回 None
+fn pick_high_sample_rate_config(device: &cpal::Device) -> Option<SupportedStreamConfig> {
+    let configs = device.supported_output_configs().ok()?;
+    let mut best: Option<(u32, SupportedStreamConfig)> = None;
+    for range in configs {
+        // 仅考虑立体声 f32，与 DSP 链输出格式匹配
+        if range.channels() != 2 || range.sample_format() != SampleFormat::F32 {
+            continue;
+        }
+        let max_supported = range.max_sample_rate().0;
+        // 按偏好降序找第一个 max_supported 满足的高采样率
+        let Some(target_rate) = HIGH_RATE_PREFERENCE
+            .iter()
+            .copied()
+            .find(|&r| r <= OUTPUT_RATE_CAP && r <= max_supported)
+        else {
+            continue;
+        };
+        // try_with_sample_rate 检查 [min, max] 范围
+        if let Some(config) = range.try_with_sample_rate(SampleRate(target_rate)) {
+            let is_better = best
+                .as_ref()
+                .map(|(prev_rate, _)| target_rate > *prev_rate)
+                .unwrap_or(true);
+            if is_better {
+                best = Some((target_rate, config));
+            }
+        }
+    }
+    best.map(|(_, config)| config)
 }
 
 /// 取设备默认输出配置的采样率，查询失败回退到 `TARGET_SAMPLE_RATE`

@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { app, BrowserWindow, screen } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import { createWindow } from "./create";
@@ -230,6 +230,105 @@ export const applyDynamicIslandNonOcclusive = (enabled: boolean): void => {
   } else {
     stopCursorPolling();
   }
+};
+
+/** 全屏抑制轮询间隔（ms）：1s 足够，避免 CPU 占用 */
+const FULLSCREEN_POLL_MS = 1000;
+
+/** 全屏抑制状态：当前是否因前台全屏而隐藏灵动岛 */
+let suppressFullscreenTimer: NodeJS.Timeout | null = null;
+/** 当前是否处于"被全屏抑制"状态，避免重复 hide/show 抖动 */
+let suppressedByFullscreen = false;
+
+/**
+ * 判断指定显示器上是否有本应用的全屏窗口覆盖整个屏幕
+ * 简化方案：仅检测本应用窗口（Electron API 无法枚举外部进程窗口）
+ * 适用于本应用主窗口进入全屏（如视频播放器全屏）的场景
+ * @param display - 灵动岛所在显示器
+ */
+const isFullscreenOnDisplay = (display: Electron.Display): boolean => {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (!focused || focused.isDestroyed()) return false;
+  // 灵动岛窗口自身可能是 focused（鼠标悬停交互时），跳过
+  if (focused === dynamicIslandWindow) return false;
+  const b = focused.getBounds();
+  const db = display.bounds;
+  // 窗口 bounds 覆盖整个屏幕即视为全屏
+  return (
+    b.x <= db.x &&
+    b.y <= db.y &&
+    b.x + b.width >= db.x + db.width &&
+    b.y + b.height >= db.y + db.height
+  );
+};
+
+/** 全屏抑制轮询：每秒检查前台窗口是否全屏覆盖灵动岛所在显示器 */
+const updateFullscreenSuppression = (): void => {
+  const win = getDynamicIslandWindow();
+  if (!win) return;
+  const display = getCurrentDisplay();
+  const isFs = isFullscreenOnDisplay(display);
+  if (isFs === suppressedByFullscreen) return;
+  suppressedByFullscreen = isFs;
+  if (isFs) {
+    // 前台全屏：隐藏灵动岛避免遮挡
+    win.hide();
+  } else {
+    // 退出全屏：恢复显示并重置置顶层级（hide/show 后需重申）
+    win.showInactive();
+    const config = store.get("dynamicIsland");
+    win.setAlwaysOnTop(config.alwaysOnTop, "screen-saver");
+  }
+};
+
+const startFullscreenSuppression = (): void => {
+  if (suppressFullscreenTimer) return;
+  suppressedByFullscreen = false;
+  suppressFullscreenTimer = setInterval(() => {
+    if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) {
+      stopFullscreenSuppression();
+      return;
+    }
+    updateFullscreenSuppression();
+  }, FULLSCREEN_POLL_MS);
+};
+
+const stopFullscreenSuppression = (): void => {
+  if (suppressFullscreenTimer) {
+    clearInterval(suppressFullscreenTimer);
+    suppressFullscreenTimer = null;
+  }
+  suppressedByFullscreen = false;
+};
+
+/**
+ * 应用全屏抑制：开启后定时检测前台全屏窗口并隐藏灵动岛
+ * 仅 Windows/Linux 生效；macOS 全屏为独占空间语义，无需此处理
+ * @param enabled - 是否开启全屏抑制
+ */
+export const applyDynamicIslandSuppressFullscreen = (enabled: boolean): void => {
+  if (isMac) return;
+  if (enabled) {
+    startFullscreenSuppression();
+  } else {
+    stopFullscreenSuppression();
+    // 关闭抑制时若窗口仍处于隐藏状态，恢复显示
+    const win = getDynamicIslandWindow();
+    if (win && !win.isVisible() && !win.isDestroyed()) {
+      win.showInactive();
+      const config = store.get("dynamicIsland");
+      win.setAlwaysOnTop(config.alwaysOnTop, "screen-saver");
+    }
+  }
+};
+
+/**
+ * 应用开机自启：通过 Electron app.setLoginItemSettings 同步到系统
+ * 控制整个 SPlayer 跟随系统开机启动（灵动岛作为子窗口自动随之创建）
+ * @param enabled - 是否开机自启
+ */
+export const applyDynamicIslandAutoStart = (enabled: boolean): void => {
+  app.setLoginItemSettings({ openAtLogin: enabled });
 };
 
 /**
@@ -604,6 +703,9 @@ export const createDynamicIslandWindow = (): BrowserWindow => {
       dynamicIslandWindow.setIgnoreMouseEvents(true, { forward: true });
       startCursorPolling();
     }
+    if (config.suppressFullscreen && !isMac) {
+      startFullscreenSuppression();
+    }
     // 主动推一次配置，确保渲染进程收到最新值（避免监听器注册时机竞态）
     dynamicIslandWindow.webContents.send("dynamicIsland:configChange", config);
   });
@@ -614,6 +716,7 @@ export const createDynamicIslandWindow = (): BrowserWindow => {
 
   dynamicIslandWindow.on("closed", () => {
     stopCursorPolling();
+    stopFullscreenSuppression();
     dynamicIslandWindow = null;
     lastBroadcastMode = null;
     setTrayDynamicIsland(false);

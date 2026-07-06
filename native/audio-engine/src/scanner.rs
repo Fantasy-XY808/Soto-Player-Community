@@ -18,7 +18,28 @@ use crate::metadata;
 
 /// 支持的音频文件扩展名
 const AUDIO_EXTENSIONS: &[&str] = &[
-    "mp3", "flac", "wav", "ogg", "aac", "m4a", "wma", "opus", "ape",
+    "mp3",
+    "flac",
+    "wav",
+    "ogg",
+    "aac",
+    "m4a",
+    "wma",
+    "opus",
+    "ape",
+    // unlock-music 加密格式（解密后为 mp3/flac 等标准容器）
+    "ncm",
+    "qmc0",
+    "qmc1",
+    "qmc2",
+    "qmc3",
+    "qmcflac",
+    "tkm",
+    "kgm",
+    "kgma",
+    "kwm",
+    "mflac",
+    "tm",
 ];
 
 /// 每批回调的文件数
@@ -77,9 +98,15 @@ fn is_audio_file(path: &Path) -> bool {
 /// 使用 ffmpeg_audio 打开音频文件并读取元数据
 ///
 /// 新 API 下 AudioReader 不再要求重采样参数，扫库每文件省一次 SwrContext 分配
+/// 加密格式（ncm/qmc 等）先解密为内存字节流再喂给 AudioReader
 pub(crate) fn probe_fast(path: &str, cover_cache_dir: Option<&str>) -> Option<ScannedTrack> {
-    let file = fs::File::open(path).ok()?;
-    let reader = AudioReader::new(file).ok()?;
+    let reader = if let Some(fmt) = crate::decryptor::detect(path) {
+        let decrypted = crate::decryptor::decrypt(path, fmt).ok()?;
+        AudioReader::new(decrypted).ok()?
+    } else {
+        let file = fs::File::open(path).ok()?;
+        AudioReader::new(file).ok()?
+    };
 
     let duration = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
 

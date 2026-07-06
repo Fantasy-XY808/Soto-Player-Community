@@ -7,7 +7,9 @@ import {
   ListenTogetherStatus,
   ListenTogetherLocalUser,
   ListenTogetherDiscoveredSession,
+  ListenTogetherPermissions,
 } from "@shared/types/settings";
+import type { EasyTierStatus } from "@main/listenTogether";
 import { LibraryApi } from "@shared/types/library";
 import { NowPlayingApi } from "@shared/types/nowPlaying";
 import { PluginsApi } from "@shared/types/plugin";
@@ -22,12 +24,16 @@ import {
 } from "@shared/types/window";
 import { HotkeyApi } from "@shared/types/hotkey";
 import { StreamingApi } from "@shared/types/streaming";
+import { QqmusicApi } from "@shared/types/qqmusic";
+import { KugouApi } from "@shared/types/kugou";
 import { LastfmApi } from "@shared/types/lastfm";
 import { IpcResponse } from "@shared/types/player";
 import { StatsApi } from "@shared/types/stats";
 import { UpdateApi } from "@shared/types/update";
 import { CloudUploadApi } from "@shared/types/cloudUpload";
 import { MigrationApi } from "@shared/types/migration";
+import { UnblockApi } from "@shared/types/unblock";
+import { AudioAnalysisApi } from "@shared/types/audioAnalysis";
 
 declare global {
   interface Window {
@@ -59,6 +65,7 @@ declare global {
         relaunch: () => Promise<void>;
         onProtocolUrl: (callback: (url: string) => void) => () => void;
         consumePendingProtocolUrl: () => Promise<string | null>;
+        pickDirectory: () => Promise<string | null>;
       };
       library: LibraryApi;
       window: WindowApi;
@@ -95,6 +102,8 @@ declare global {
       stats: StatsApi;
       hotkey: HotkeyApi;
       streaming: StreamingApi;
+      qqmusic: QqmusicApi;
+      kugou: KugouApi;
       lastfm: LastfmApi;
       externalApi: {
         restart: () => Promise<ExternalApiStatus>;
@@ -107,9 +116,14 @@ declare global {
         startHost: (
           name: string,
           password: string,
+          permissions: ListenTogetherPermissions,
         ) => Promise<{ ok: boolean; address: string | null; error?: string }>;
         stopHost: () => Promise<void>;
-        joinSession: (url: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+        joinSession: (
+          url: string,
+          password: string,
+          shareCode?: string,
+        ) => Promise<{ ok: boolean; error?: string }>;
         leaveSession: () => Promise<void>;
         browseSessions: () => void;
         stopBrowse: () => void;
@@ -117,10 +131,20 @@ declare global {
           callback: (sessions: ListenTogetherDiscoveredSession[]) => void,
         ) => () => void;
         getDiscoveredSessions: () => Promise<ListenTogetherDiscoveredSession[]>;
+        getEasyTierStatus: () => Promise<EasyTierStatus>;
         notifyQueueUpdate: (queue: Track[], currentIndex: number) => void;
+        // 主机端：通知主进程曲目切换（用于 player:load 之外的场景，例如客户端首次加入后主机已就绪）
+        // 主机端通常由 player.ts 直接调用 handlePlayerEvent 触发广播；本通道作为渲染端冗余兜底
+        notifyTrackChange: (
+          track: Track | null,
+          position: number,
+          state: "playing" | "paused",
+        ) => void;
       };
       update: UpdateApi;
       migration: MigrationApi;
+      unblock: UnblockApi;
+      audioAnalysis: AudioAnalysisApi;
     };
   }
 }

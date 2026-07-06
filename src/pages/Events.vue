@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { EventItem } from "@/apis/event/netease";
 import { fetchEvents } from "@/apis/event/netease";
+import { songsByIds } from "@/apis/song/netease";
 import { useUserStore } from "@/stores/user";
+import { playNow } from "@/core/player";
+import { toast } from "@/composables/useToast";
+import { navigateToEvent, navigateToMv, navigateToVideo } from "@/utils/navigate";
+import i18n from "@/i18n";
 
 const { t } = useI18n();
 const user = useUserStore();
@@ -53,10 +58,16 @@ const loadMore = async (): Promise<void> => {
 /** 解析动态 JSON 取主要内容 */
 const parseEvent = (
   item: EventItem,
-): { text: string; cover?: string; title?: string; refType?: string; refId?: string } => {
+): {
+  text: string;
+  cover?: string;
+  title?: string;
+  refType?: "song" | "playlist" | "album" | "video" | "mv";
+  refId?: string;
+} => {
   try {
     const parsed = JSON.parse(item.json);
-    // 引用实体优先级：song > playlist > album
+    // 引用实体优先级：song > video > mv > playlist > album
     if (parsed?.song?.id) {
       return {
         text: parsed?.msg || parsed?.json?.msg || "",
@@ -64,6 +75,24 @@ const parseEvent = (
         title: parsed?.song?.name,
         refType: "song",
         refId: String(parsed.song.id),
+      };
+    }
+    if (parsed?.video?.videoId) {
+      return {
+        text: parsed?.msg || parsed?.json?.msg || "",
+        cover: parsed?.video?.coverUrl,
+        title: parsed?.video?.title,
+        refType: "video",
+        refId: String(parsed.video.videoId),
+      };
+    }
+    if (parsed?.mv?.id) {
+      return {
+        text: parsed?.msg || parsed?.json?.msg || "",
+        cover: parsed?.mv?.cover,
+        title: parsed?.mv?.name,
+        refType: "mv",
+        refId: String(parsed.mv.id),
       };
     }
     if (parsed?.playlist?.id) {
@@ -90,14 +119,52 @@ const parseEvent = (
   }
 };
 
-/** 点击引用条目跳转到对应详情页 */
-const onRefClick = (item: EventItem): void => {
+/** 引用条目图标 */
+const refIcon = (refType?: string): string => {
+  if (refType === "video" || refType === "mv") return "video";
+  if (refType === "playlist") return "list";
+  if (refType === "album") return "disc";
+  return "music";
+};
+
+/** 点击引用条目：song 直接播放，video/mv 跳播放页，playlist/album 跳详情页 */
+const onRefClick = async (item: EventItem): Promise<void> => {
   const parsed = parseEvent(item);
   if (!parsed.refType || !parsed.refId) return;
-  router.push({
-    name: "collection",
-    params: { source: "netease", type: parsed.refType, id: parsed.refId },
-  });
+  switch (parsed.refType) {
+    case "song":
+      try {
+        const tracks = await songsByIds([parsed.refId]);
+        const track = tracks[0];
+        if (!track) {
+          toast.info(i18n.global.t("common.unavailable"));
+          return;
+        }
+        await playNow(track);
+      } catch (error) {
+        console.warn("[events] play song failed:", error);
+        toast.info(i18n.global.t("common.unavailable"));
+      }
+      return;
+    case "video":
+      navigateToVideo(parsed.refId, { name: parsed.title });
+      return;
+    case "mv":
+      navigateToMv(parsed.refId, { name: parsed.title });
+      return;
+    case "playlist":
+    case "album":
+      router.push({
+        name: "collection",
+        params: { source: "netease", type: parsed.refType, id: parsed.refId },
+      });
+      return;
+  }
+};
+
+/** 点击动态卡片进入详情页 */
+const onCardClick = (event: EventItem): void => {
+  navigateToEvent(event.id);
 };
 
 /** 格式化时间 */
@@ -140,21 +207,31 @@ watch(
           <div class="text-sm">{{ t("events.needLogin") }}</div>
         </div>
       </div>
-      <!-- 加载中（首屏） -->
+      <!-- 加载中（首屏）：骨架屏占位，模拟卡片布局 -->
       <div
         v-else-if="loading && events.length === 0"
         key="loading"
-        class="flex flex-1 items-center justify-center"
+        class="min-h-0 flex-1 overflow-y-auto"
       >
-        <div class="text-center text-on-surface-variant/60">
-          <SLoading class="mx-auto mb-4 block text-4xl text-primary/70" />
-          <div class="text-sm">{{ t("common.loading") }}</div>
+        <div class="mx-auto flex max-w-[1000px] flex-col gap-4 px-5 pb-6">
+          <SCard v-for="i in 4" :key="i" radius="lg" class="flex gap-3 p-4">
+            <SSkeleton type="circle" class="size-12 shrink-0" />
+            <div class="min-w-0 flex-1 flex flex-col gap-2 py-1">
+              <SSkeleton type="lines" :lines="2" />
+            </div>
+          </SCard>
         </div>
       </div>
       <!-- 动态列表 -->
       <div v-else-if="events.length > 0" key="list" class="min-h-0 flex-1 overflow-y-auto">
         <div class="mx-auto flex max-w-[1000px] flex-col gap-4 px-5 pb-6">
-          <SCard v-for="event in events" :key="event.id" radius="lg" class="flex gap-3 p-4">
+          <SCard
+            v-for="event in events"
+            :key="event.id"
+            radius="lg"
+            class="flex gap-3 p-4 cursor-pointer transition-colors hover:bg-on-surface/3"
+            @click="onCardClick(event)"
+          >
             <SImg
               :src="parseEvent(event).cover || event.userAvatar"
               :alt="event.userName"
@@ -178,9 +255,21 @@ watch(
               <div
                 v-if="parseEvent(event).title"
                 class="mt-2 flex cursor-pointer items-center gap-2 rounded-lg bg-on-surface/5 px-3 py-2 transition-colors hover:bg-primary/10"
-                @click="onRefClick(event)"
+                @click.stop="onRefClick(event)"
               >
-                <IconLucideMusic class="size-4 shrink-0 text-primary/60" />
+                <IconLucideVideo
+                  v-if="refIcon(parseEvent(event).refType) === 'video'"
+                  class="size-4 shrink-0 text-primary/60"
+                />
+                <IconLucideListMusic
+                  v-else-if="refIcon(parseEvent(event).refType) === 'list'"
+                  class="size-4 shrink-0 text-primary/60"
+                />
+                <IconLucideDisc
+                  v-else-if="refIcon(parseEvent(event).refType) === 'disc'"
+                  class="size-4 shrink-0 text-primary/60"
+                />
+                <IconLucideMusic v-else class="size-4 shrink-0 text-primary/60" />
                 <span class="truncate text-sm text-on-surface-variant/70">
                   {{ parseEvent(event).title }}
                 </span>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { useStatusStore } from "@/stores/status";
+import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { getFftFrame } from "@/services/playback";
 import { acquireFft, releaseFft } from "@/services/fftCapture";
+import { subscribeRaf } from "@/services/rafScheduler";
+import { useBreathing } from "@/composables/useBreathing";
 
 interface Props {
   /** 是否处于活跃状态 */
@@ -23,7 +26,23 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const status = useStatusStore();
+const media = useMediaStore();
 const settings = useSettingsStore();
+
+/** 频谱心跳：复用全局 breathing scale（低频驱动非对称 EMA），按强度映射为整体放大倍率 */
+const { scale: breathingScale } = useBreathing();
+/** useBreathing scale 偏移上限（与 useBreathing 内 MAX_SCALE_OFFSET 一致） */
+const BREATHING_MAX_OFFSET = 0.08;
+/** 心跳最大放大上限：intensity=100 时最大放大至 1.8x（与 BetterLyrics 一致） */
+const HEART_MAX_OFFSET = 0.8;
+/** 心跳容器样式：transform-origin 底部中心，scale 跟随低频与强度 */
+const heartStyle = computed(() => {
+  if (!settings.player.spectrumBreathing) return { transform: "scale(1)" };
+  const intensity = Math.max(0, Math.min(1, settings.player.spectrumBreathingIntensity / 100));
+  const bassEnergy = Math.max(0, (breathingScale.value - 1) / BREATHING_MAX_OFFSET);
+  const offset = bassEnergy * intensity * HEART_MAX_OFFSET;
+  return { transform: `scale(${(1 + offset).toFixed(4)})` };
+});
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -36,11 +55,11 @@ const BAR_GAP = 3;
 /** 后端推送间隔(ms),与 audio-engine 的 32ms FFT 定时器对齐 */
 const PUSH_INTERVAL = 32;
 /** 辉光模糊半径(px) */
-const GLOW_BLUR = 16;
+const GLOW_BLUR = 12;
 /** RAF 节流间隔(ms),30fps 与后端推送对齐,避免 60fps 冗余插值 */
-const FRAME_INTERVAL = 32;
-/** DPR 上限:高 DPI 屏(2x)渲染像素 4 倍,限制到 1.5 减少 44% 像素开销 */
-const MAX_DPR = 1.5;
+const FRAME_INTERVAL = 33;
+/** DPR 上限:高 DPI 屏(2x)渲染像素 4 倍,限制到 1.0 减少 75% 像素开销 */
+const MAX_DPR = 1.0;
 /** 容器基础高度(px),最终高度 = 基础高度 × spectrumMaxHeight,跟随设置变化 */
 const BASE_HEIGHT = 80;
 /** 容器高度上限(px),避免设置过大撑爆底栏 */
@@ -107,14 +126,15 @@ const drawBars = (
 ): void => {
   for (let i = 0; i < values.length; i++) {
     const barHeight = Math.min(maxHeightPx, values[i] * cssHeight);
-    if (barHeight <= 0.5) continue;
-    const y = cssHeight - barHeight;
     const xRight = halfWidth + i * slotWidth;
     const xLeft = halfWidth - (i + 1) * slotWidth;
-    ctx.beginPath();
-    ctx.roundRect(xRight, y, barWidth, barHeight, props.radius);
-    ctx.roundRect(xLeft, y, barWidth, barHeight, props.radius);
-    ctx.fill();
+    if (barHeight > 0.5) {
+      const y = cssHeight - barHeight;
+      ctx.beginPath();
+      ctx.roundRect(xRight, y, barWidth, barHeight, props.radius);
+      ctx.roundRect(xLeft, y, barWidth, barHeight, props.radius);
+      ctx.fill();
+    }
   }
 };
 
@@ -162,22 +182,17 @@ const drawCurve = (
   ctx.fill();
 };
 
-/** 上次绘制时间戳,30fps 节流 */
-let lastDrawTime = 0;
 /** display 是否仍在衰减(避免静止时空转重绘) */
 let displaySettling = false;
+/** 共享 RAF 订阅取消函数；非空表示正在订阅 */
+let unsubscribe: (() => void) | null = null;
 
-/** 绘制频谱(30fps 节流,与后端 FFT 推送对齐) */
-const draw = (): void => {
+/** 绘制频谱（由共享 RAF 调度器按 FRAME_INTERVAL 节流调用） */
+const draw = (now: number): void => {
   const canvas = canvasRef.value;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-
-  // 30fps 节流:与后端 32ms 推送对齐,避免 60fps 冗余重绘
-  const now = performance.now();
-  if (now - lastDrawTime < FRAME_INTERVAL) return;
-  lastDrawTime = now;
 
   // 检测新帧推送
   const data = getFftFrame();
@@ -190,7 +205,7 @@ const draw = (): void => {
     displaySettling = true;
   }
 
-  // 静止优化:无新数据且 display 已收敛(全部 < 0.001)时跳过重绘
+  // 静止优化:无新数据且 display 已收敛时跳过重绘
   if (!newData && !displaySettling) return;
 
   // 时间插值:在 prev → curr 之间按时间平滑过渡,消除帧间 stair-step
@@ -226,11 +241,14 @@ const draw = (): void => {
   const sensitivity = settings.player.spectrumSensitivity;
   const maxHeightPx = cssHeight * 0.95;
   const values = computeBarValues(numBars, usableLen).map((v) => v * sensitivity);
+  const isCurve = settings.player.spectrumStyle === "curve";
 
   ctx.clearRect(0, 0, cssWidth, cssHeight);
-  const fillStyle = getComputedStyle(canvas).color;
+  // getComputedStyle 可能返回空字符串（CSS 变量未定义时），用 fallback 兜底
+  // 避免空 fillStyle 导致频谱条透明不可见
+  const computedColor = getComputedStyle(canvas).color;
+  const fillStyle = computedColor || "rgb(255, 255, 255)";
   const halfWidth = cssWidth / 2;
-  const isCurve = settings.player.spectrumStyle === "curve";
 
   // 辉光层:模糊 + lighter 混合,颜色叠加变亮
   ctx.save();
@@ -253,8 +271,6 @@ const draw = (): void => {
   }
 };
 
-const { resume, pause } = useRafFn(draw, { immediate: false });
-
 // 本地持有标记,保证 acquire / release 严格配对
 let fftAcquired = false;
 
@@ -263,11 +279,16 @@ const startCapture = (): void => {
     acquireFft();
     fftAcquired = true;
   }
-  resume();
+  if (!unsubscribe) {
+    unsubscribe = subscribeRaf(draw, FRAME_INTERVAL);
+  }
 };
 
 const stopCapture = (): void => {
-  pause();
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
   if (fftAcquired) {
     releaseFft();
     fftAcquired = false;
@@ -287,6 +308,14 @@ watch(
 // 容器高度跟随 spectrumMaxHeight 变化时重新调整画布
 watch(effectiveHeight, () => resizeCanvas());
 
+// 切歌时触发一次重绘清除 canvas
+watch(
+  () => media.track?.id,
+  () => {
+    displaySettling = true;
+  },
+);
+
 onMounted(() => {
   resizeCanvas();
   window.addEventListener("resize", resizeCanvas);
@@ -305,7 +334,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="absolute left-0 bottom-0 w-full flex justify-center z-0 pointer-events-none transition-opacity duration-300"
-    :style="{ opacity: show ? 0.65 : 0.15 }"
+    :style="{ opacity: show ? 0.85 : 0.15, ...heartStyle, transformOrigin: 'bottom center' }"
   >
     <canvas ref="canvasRef" class="spectrum-canvas" />
   </div>
@@ -313,6 +342,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .spectrum-canvas {
+  /* 显式设置颜色，不依赖 CSS 继承链（继承链断裂时 getComputedStyle().color
+     可能返回空字符串，导致 fillStyle 无效 → 频谱条透明不可见） */
+  color: var(--spectrum-color, rgb(var(--s-cover)));
+  /* 亮度/饱和度由父级 CSS 变量驱动：固定值 + 智能调暗叠加 */
+  filter: brightness(var(--spectrum-brightness, 1)) saturate(var(--spectrum-saturate, 1));
+  transition: filter 0.3s ease;
   mask: linear-gradient(
     90deg,
     hsla(0, 0%, 100%, 0) 0,

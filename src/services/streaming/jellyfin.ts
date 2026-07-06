@@ -23,7 +23,7 @@ import {
 } from "./transform";
 
 const CLIENT_NAME = "Soto-Player-Community";
-const CLIENT_VERSION = "2.3.1";
+const CLIENT_VERSION = "2.3.6";
 const DEVICE_NAME = "Soto Player Desktop";
 
 /** 派生稳定 deviceId（基于 cfg.id） */

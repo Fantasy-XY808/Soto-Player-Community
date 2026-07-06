@@ -10,11 +10,13 @@ import type { ThemePalette } from "@/types/theme";
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
 
-/** 默认主色 */
-export const DEFAULT_PRIMARY = "#fe7971";
+/** 默认主色 — 与新 LOGO 配色对齐 */
+export const DEFAULT_PRIMARY = "#D4F7F7";
 
-/** 默认封面色（无封面时） */
-const DEFAULT_COVER_RGB: [number, number, number] = [239, 239, 239];
+/** 默认封面色（无封面时）：深色主题用亮色文字，浅色主题用深色文字 */
+const DEFAULT_COVER_RGB_DARK: [number, number, number] = [228, 228, 231];
+const DEFAULT_COVER_RGB_LIGHT: [number, number, number] = [24, 24, 27];
+const DEFAULT_COVER_RGB: [number, number, number] = DEFAULT_COVER_RGB_DARK;
 
 /** 封面色补间时长（ms） */
 const COVER_TWEEN_DURATION = 300;
@@ -75,11 +77,11 @@ const tweenCoverColor = (
 /**
  * 写入封面色到 --s-cover，带 300ms RGB lerp 平滑过渡
  * @param targetHex - 目标 HEX，null 时回退到默认色
+ * @param isDark - 当前是否深色主题（决定无封面时的默认文字色）
  */
-const writeCoverColorWithTween = (targetHex: string | null): void => {
-  const targetRgb: [number, number, number] = targetHex
-    ? hexToRgbTuple(targetHex)
-    : DEFAULT_COVER_RGB;
+const writeCoverColorWithTween = (targetHex: string | null, isDark: boolean): void => {
+  const fallback = isDark ? DEFAULT_COVER_RGB_DARK : DEFAULT_COVER_RGB_LIGHT;
+  const targetRgb: [number, number, number] = targetHex ? hexToRgbTuple(targetHex) : fallback;
 
   // 颜色未变化：直接写入确保一致后返回
   if (
@@ -298,18 +300,42 @@ const extractColorFromImageElement = (img: HTMLImageElement): string | null => {
   // 彩度检测：scored 色的 chroma 过低说明实际无有效彩色
   const scoredHct = Hct.fromInt(ranked[0]);
   if (scoredHct.chroma < 6) return null;
-  // 经 Material 主题提取 secondary 色相后提亮至 tone 90
+  // 经 Material 主题提取 secondary 色相后保留原色 tone，用于背景
+  // --s-cover 文字色会在 applyThemeToDOM 中根据此色 tone 反转
   const materialTheme: Theme = themeFromSourceColor(ranked[0]);
   const { hue, chroma } = materialTheme.palettes.secondary;
+  const originalTone = Hct.fromInt(ranked[0]).tone;
   // 释放 canvas GPU 资源
   canvas.width = 0;
   canvas.height = 0;
-  return argbToHex(Hct.from(hue, chroma, 90).toInt());
+  return argbToHex(Hct.from(hue, chroma, originalTone).toInt());
+};
+
+/**
+ * 根据封面色和主题明暗计算文字色
+ *
+ * 设计原则：`--s-cover` 是"文字色"，必须与播放器实际背景形成对比。
+ * 播放器背景由 `bg-surface`（深色主题深色 / 浅色主题淡色）+ 封面模糊层叠加而成，
+ * 整体亮度由主题决定，而非封面色 tone——因此文字色 tone 也由主题决定：
+ * - 深色主题 → tone 90（亮色文字）
+ * - 浅色主题 → tone 20（深色文字）
+ *
+ * 保留封面色的 hue 和 chroma，让文字色调与封面协调。
+ * @param coverHex - 封面色 HEX
+ * @param isDark - 当前是否深色主题
+ * @returns 文字色 HEX
+ */
+const computeCoverForegroundColor = (coverHex: string, isDark: boolean): string => {
+  const argb = argbFromHex(coverHex);
+  const hct = Hct.fromInt(argb);
+  const targetTone = isDark ? 90 : 20;
+  return argbToHex(Hct.from(hct.hue, hct.chroma, targetTone).toInt());
 };
 
 /**
  * 将色板和封面主色写入 CSS 自定义属性，并切换明暗 class
  * 封面色走 300ms RGB lerp 补间，避免切歌硬切
+ * 文字色（--s-cover）根据封面原色亮度反转，保证淡色背景上文字清晰
  */
 export const applyThemeToDOM = (
   palette: ThemePalette,
@@ -321,6 +347,8 @@ export const applyThemeToDOM = (
     const cssVar = `--s-${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
     root.style.setProperty(cssVar, value);
   }
-  writeCoverColorWithTween(coverColorHex);
+  // --s-cover 用文字色：深色主题→亮色文字（tone 90），浅色主题→深色文字（tone 20）
+  const coverFgHex = coverColorHex ? computeCoverForegroundColor(coverColorHex, isDark) : null;
+  writeCoverColorWithTween(coverFgHex, isDark);
   root.classList.toggle("dark", isDark);
 };

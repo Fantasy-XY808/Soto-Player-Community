@@ -3,6 +3,7 @@ import generalCategory from "./categories/general";
 import appearanceCategory from "./categories/appearance";
 import windowCategory from "./categories/window";
 import playbackCategory from "./categories/playback";
+import automixCategory from "./categories/automix";
 import audioCategory from "./categories/audio";
 import playerUICategory from "./categories/playerUI";
 import lyricCategory from "./categories/lyric";
@@ -21,6 +22,7 @@ export const settingsSchema: SettingCategory[] = [
   appearanceCategory,
   windowCategory,
   playbackCategory,
+  automixCategory,
   audioCategory,
   playerUICategory,
   lyricCategory,

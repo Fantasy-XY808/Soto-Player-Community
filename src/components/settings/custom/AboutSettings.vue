@@ -13,6 +13,7 @@ import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideGithub from "~icons/lucide/github";
 import IconLucideRss from "~icons/lucide/rss";
 import IconLucideArrowUpRight from "~icons/lucide/arrow-up-right";
+import IconLucideMessageCircle from "~icons/lucide/message-circle";
 
 const { t } = useI18n();
 const update = useUpdateStore();
@@ -38,8 +39,13 @@ interface Dependency {
   url: string;
 }
 
-/** 依赖的开源项目（SPlayer-Next 为本项目上游，置于首位） */
+/** 依赖的开源项目 */
 const dependencies: Dependency[] = [
+  {
+    name: "EasyTier",
+    description: "一起听 P2P 内网穿透 — 网络组网引擎（已内嵌全平台二进制）",
+    url: "https://github.com/EasyTier/EasyTier",
+  },
   {
     name: "SPlayer-Next",
     description: "本项目上游 — 现代化桌面音乐播放器",
@@ -61,6 +67,11 @@ const dependencies: Dependency[] = [
 const community = computed(() => [
   { name: REPO_NAME, url: REPO_URL, icon: IconLucideGithub },
   { name: t("settings.about.officialSite"), url: HOMEPAGE_URL, icon: IconLucideRss },
+  {
+    name: t("settings.about.qqGroup"),
+    url: "https://qm.qq.com/q/1043061896",
+    icon: IconLucideMessageCircle,
+  },
 ]);
 
 /** 开发人员：作者本人（GitHub 用户名 + 主页链接） */

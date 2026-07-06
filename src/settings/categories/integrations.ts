@@ -2,7 +2,7 @@ import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
 import ExternalApiPanel from "@/components/settings/custom/ExternalApiPanel.vue";
 import LastfmPanel from "@/components/settings/custom/LastfmPanel.vue";
-import ListenTogetherPanel from "@/components/settings/custom/ListenTogetherPanel.vue";
+import ListenTogetherSettingsPanel from "@/components/settings/custom/ListenTogetherSettingsPanel.vue";
 import IconLucideLink from "~icons/lucide/link";
 
 const integrationsCategory: SettingCategory = {
@@ -178,15 +178,15 @@ const integrationsCategory: SettingCategory = {
               options: [
                 {
                   value: "manual",
-                  labelKey: "settings.listenTogether.progressMode.manual",
+                  labelKey: "settings.listenTogetherProgressMode.manual",
                 },
                 {
                   value: "interval",
-                  labelKey: "settings.listenTogether.progressMode.interval",
+                  labelKey: "settings.listenTogetherProgressMode.interval",
                 },
                 {
                   value: "songOnly",
-                  labelKey: "settings.listenTogether.progressMode.songOnly",
+                  labelKey: "settings.listenTogetherProgressMode.songOnly",
                 },
               ],
               defaultValue: "manual",
@@ -208,15 +208,15 @@ const integrationsCategory: SettingCategory = {
               options: [
                 {
                   value: "currentOnly",
-                  labelKey: "settings.listenTogether.queueMode.currentOnly",
+                  labelKey: "settings.listenTogetherQueueMode.currentOnly",
                 },
                 {
                   value: "currentAndNext",
-                  labelKey: "settings.listenTogether.queueMode.currentAndNext",
+                  labelKey: "settings.listenTogetherQueueMode.currentAndNext",
                 },
                 {
                   value: "fullQueue",
-                  labelKey: "settings.listenTogether.queueMode.fullQueue",
+                  labelKey: "settings.listenTogetherQueueMode.fullQueue",
                 },
               ],
               defaultValue: "currentAndNext",
@@ -230,7 +230,7 @@ const integrationsCategory: SettingCategory = {
             {
               key: "listenTogetherPanel",
               type: "custom",
-              component: ListenTogetherPanel,
+              component: ListenTogetherSettingsPanel,
               fullWidth: true,
               keywords: [
                 "listenTogether.host.stop",

@@ -2,6 +2,7 @@ import { onScopeDispose, ref, watch } from "vue";
 import { useStatusStore } from "@/stores/status";
 import { getFftFrame } from "@/services/playback";
 import { acquireFft, releaseFft } from "@/services/fftCapture";
+import { subscribeRaf } from "@/services/rafScheduler";
 
 /** Attack 系数:上升时 EMA 平滑因子,响应迅速 */
 const ATTACK = 0.2;
@@ -23,28 +24,20 @@ const FRAME_INTERVAL = 32;
 let refCount = 0;
 /** 模块级共享:FFT 是否已申请 */
 let fftAcquired = false;
-/** 模块级共享:RAF 句柄 */
-let rafId = 0;
+/** 模块级共享:RAF 取消订阅函数 */
+let unsubscribe: (() => void) | null = null;
 /** 模块级共享:当前 scale(非响应式内部变量) */
 let currentScale = 1.0;
 /** 模块级共享:FullPlayer 是否展开 */
 let isAnyExpanded = false;
 /** 模块级共享:是否正在播放(暂停时停止 RAF + 释放 FFT) */
 let isAnyPlaying = false;
-/** 上次 tick 时间戳,用于 30fps 节流 */
-let lastTickTime = 0;
 
 /** 共享响应式 scale,所有调用者读取同一份 */
 const scale = ref(1.0);
 
-/** 单帧 FFT 计算 + EMA 平滑(30fps 节流) */
-const tick = (ts: number): void => {
-  // 30fps 节流:与后端 FFT 推送频率对齐,避免 60fps 冗余插值
-  if (ts - lastTickTime < FRAME_INTERVAL) {
-    rafId = requestAnimationFrame(tick);
-    return;
-  }
-  lastTickTime = ts;
+/** 单帧 FFT 计算 + EMA 平滑(由 subscribeRaf 按 30fps 节流) */
+const tick = (): void => {
   const data = getFftFrame();
   if (data && data.length > 0) {
     let sum = 0;
@@ -62,20 +55,20 @@ const tick = (ts: number): void => {
     }
     scale.value = currentScale;
   }
-  rafId = requestAnimationFrame(tick);
 };
 
 /** 启动 RAF(幂等) */
 const startRaf = (): void => {
-  if (rafId) return;
-  lastTickTime = 0;
-  rafId = requestAnimationFrame(tick);
+  if (unsubscribe) return;
+  unsubscribe = subscribeRaf(tick, FRAME_INTERVAL);
 };
 
 /** 停止 RAF 并复位 scale */
 const stopRaf = (): void => {
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = 0;
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
   currentScale = 1.0;
   scale.value = 1.0;
 };

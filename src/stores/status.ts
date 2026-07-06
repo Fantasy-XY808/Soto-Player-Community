@@ -73,6 +73,10 @@ export const useStatusStore = defineStore(
     const settingsCategory = ref("");
     /** 均衡器弹窗开启状态（设置页与播放栏共享） */
     const equalizerOpen = ref(false);
+    /** Automix 切歌开始序列号（每次触发过渡时自增，UI 订阅做入场动画） */
+    const automixFxSeq = ref(0);
+    /** Automix 切歌结束序列号（每次过渡完成时自增，UI 订阅做出场动画） */
+    const automixEndedSeq = ref(0);
     /** 是否正在播放 */
     const isPlaying = computed(() => state.value === "playing");
     /** 是否暂停 */
@@ -121,6 +125,8 @@ export const useStatusStore = defineStore(
       likedPageTab,
       settingsCategory,
       equalizerOpen,
+      automixFxSeq,
+      automixEndedSeq,
       currentTrack,
     };
   },

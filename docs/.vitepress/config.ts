@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "Soto-Player Community",
+  title: "Soto Player-Community",
   description: "基于 SPlayer-Next 二次开发的现代化桌面音乐播放器",
   lang: "zh-CN",
   ignoreDeadLinks: true,
@@ -23,7 +23,7 @@ export default defineConfig({
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     logo: "/favicon.png",
-    siteTitle: "Soto-Player Community",
+    siteTitle: "Soto Player-Community",
     nav: [
       { text: "首页", link: "/" },
       { text: "下载", link: "/download" },

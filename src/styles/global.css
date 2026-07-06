@@ -231,3 +231,107 @@ html[data-appearance-style="image"] [role="alertdialog"] .bg-field {
   opacity: 0;
   transform: scale(1.02);
 }
+
+/* ============================================================
+ * 播放界面控件可见性增强（controlEnhanceMode）
+ * 三种方案：background / outline / auto
+ * 挂在 FullPlayer 根容器上，通过 CSS 级联作用于所有 cover 控件
+ * ============================================================ */
+
+/* 方案 1: 背景衬底（blur / acrylic / mica）— 仅沉浸模式生效 */
+.enhance-bg-blur .s-button[type="cover"],
+.enhance-bg-blur .ce-control {
+  background-color: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+}
+
+.enhance-bg-acrylic .s-button[type="cover"],
+.enhance-bg-acrylic .ce-control {
+  background-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(1.8) brightness(0.85);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8) brightness(0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.enhance-bg-mica .s-button[type="cover"],
+.enhance-bg-mica .ce-control {
+  background-color: rgba(40, 40, 50, 0.35);
+  backdrop-filter: blur(30px) saturate(1.1);
+  -webkit-backdrop-filter: blur(30px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 方案 2: 描边（thin / shadow / glow） */
+.enhance-outline-thin .s-button[type="cover"] .s-button > *,
+.enhance-outline-thin .ce-control,
+.enhance-outline-thin .text-cover {
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.6),
+    0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.enhance-outline-thin .s-button[type="cover"] svg {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7));
+}
+
+.enhance-outline-shadow .s-button[type="cover"] .s-button > *,
+.enhance-outline-shadow .ce-control,
+.enhance-outline-shadow .text-cover {
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.enhance-outline-shadow .s-button[type="cover"] svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.enhance-outline-glow .s-button[type="cover"] .s-button > *,
+.enhance-outline-glow .ce-control,
+.enhance-outline-glow .text-cover {
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.8),
+    0 0 8px rgba(0, 0, 0, 0.4),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.enhance-outline-glow .s-button[type="cover"] svg {
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px rgba(0, 0, 0, 0.4));
+}
+
+/* 方案 3: 智能推演 — 浅色背景时自动切换文字色 + 阴影 */
+.enhance-auto {
+  --ce-auto-active: 0;
+  --ce-auto-text: rgb(20, 20, 28);
+  --ce-auto-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* 浅色背景激活时：所有 text-cover 系列强制切换为深色文字 */
+.enhance-auto[style*="--ce-auto-active: 1"] .text-cover,
+.enhance-auto[style*="--ce-auto-active: 1"] [class*="text-cover"] {
+  color: var(--ce-auto-text) !important;
+}
+
+.enhance-auto[style*="--ce-auto-active: 1"] .text-cover svg,
+.enhance-auto[style*="--ce-auto-active: 1"] [class*="text-cover"] svg {
+  filter: drop-shadow(var(--ce-auto-shadow));
+}
+
+/* auto 模式下封面主题按钮文字也跟随 */
+.enhance-auto[style*="--ce-auto-active: 1"] .s-button[type="cover"] {
+  color: var(--ce-auto-text) !important;
+}
+
+.enhance-auto[style*="--ce-auto-active: 1"] .s-button[type="cover"] svg {
+  filter: drop-shadow(var(--ce-auto-shadow));
+}
+
+/* auto 模式下进度条填充与 thumb 跟随 */
+.enhance-auto[style*="--ce-auto-active: 1"] .s-slider-fill.bg-cover\/100 {
+  background-color: var(--ce-auto-text) !important;
+}
+
+.enhance-auto[style*="--ce-auto-active: 1"] .s-slider-thumb.bg-cover\/100 {
+  background-color: var(--ce-auto-text) !important;
+}

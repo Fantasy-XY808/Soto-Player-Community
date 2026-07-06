@@ -1,19 +1,25 @@
 //! FFmpeg 音频解码 + rodio 播放 + FFT 频谱分析。
 //! 通过 NAPI-RS 暴露给 Node.js，作为 Electron 主进程的原生模块。
 
+mod analysis;
 mod audio_output;
+mod bass_enhancer;
 mod decoder;
+mod decryptor;
 mod equalizer;
 mod error;
 mod fft;
 mod http_source;
 mod logger;
 mod loudness;
+mod loudness_normalizer;
 mod metadata;
+mod neural_upsample;
 mod player;
 mod scanner;
 mod shared;
 mod source;
+mod stereo_widener;
 mod super_resolution;
 mod tag_editor;
 mod tempo;
@@ -147,6 +153,193 @@ impl From<crate::equalizer::BandParams> for JsBandParams {
     }
 }
 
+/// 音频超分参数（与 Rust SuperResParams 对齐）
+#[napi(object)]
+pub struct JsSuperResParams {
+    /// 高通截止频率（Hz），默认 4500
+    pub hp_freq: f64,
+    /// 高通 Q 值，默认 0.7
+    pub hp_q: f64,
+    /// 高频激励驱动强度，默认 3.0
+    pub drive: f64,
+    /// 二次谐波驱动，默认 0.6
+    pub h2_drive: f64,
+    /// 二次谐波混合比例，默认 0.08
+    pub h2_mix: f64,
+    /// 湿信号混合比例，默认 0.40
+    pub wet_mix: f64,
+    /// 输入安全限制，默认 1.2
+    pub input_limit: f64,
+    /// A/B bypass
+    pub bypass: bool,
+}
+
+impl From<crate::super_resolution::SuperResParams> for JsSuperResParams {
+    fn from(p: crate::super_resolution::SuperResParams) -> Self {
+        Self {
+            hp_freq: p.hp_freq as f64,
+            hp_q: p.hp_q as f64,
+            drive: p.drive as f64,
+            h2_drive: p.h2_drive as f64,
+            h2_mix: p.h2_mix as f64,
+            wet_mix: p.wet_mix as f64,
+            input_limit: p.input_limit as f64,
+            bypass: p.bypass,
+        }
+    }
+}
+
+impl From<JsSuperResParams> for crate::super_resolution::SuperResParams {
+    fn from(p: JsSuperResParams) -> Self {
+        Self {
+            hp_freq: p.hp_freq as f32,
+            hp_q: p.hp_q as f32,
+            drive: p.drive as f32,
+            h2_drive: p.h2_drive as f32,
+            h2_mix: p.h2_mix as f32,
+            wet_mix: p.wet_mix as f32,
+            input_limit: p.input_limit as f32,
+            bypass: p.bypass,
+        }
+    }
+}
+
+/// 低音增强参数
+#[napi(object)]
+pub struct JsBassEnhancerParams {
+    /// 截止频率（Hz），默认 100
+    pub freq: f64,
+    /// 增益（dB），范围 [-6, 12]，默认 9
+    pub gain_db: f64,
+    /// Q 值，默认 0.7
+    pub q: f64,
+    /// subharmonic 混合比例（0~1），默认 0.4
+    pub harmonics_mix: f64,
+    /// A/B bypass
+    pub bypass: bool,
+}
+
+impl From<crate::bass_enhancer::BassEnhancerParams> for JsBassEnhancerParams {
+    fn from(p: crate::bass_enhancer::BassEnhancerParams) -> Self {
+        Self {
+            freq: p.freq as f64,
+            gain_db: p.gain_db as f64,
+            q: p.q as f64,
+            harmonics_mix: p.harmonics_mix as f64,
+            bypass: p.bypass,
+        }
+    }
+}
+
+impl From<JsBassEnhancerParams> for crate::bass_enhancer::BassEnhancerParams {
+    fn from(p: JsBassEnhancerParams) -> Self {
+        Self {
+            freq: p.freq as f32,
+            gain_db: p.gain_db as f32,
+            q: p.q as f32,
+            harmonics_mix: p.harmonics_mix as f32,
+            bypass: p.bypass,
+        }
+    }
+}
+
+/// 立体声展宽参数
+#[napi(object)]
+pub struct JsStereoWidenerParams {
+    /// 展宽系数，0.0 ~ 2.0，默认 1.4
+    pub width: f64,
+    /// Cross-feed 混合量，0.0 ~ 0.5，默认 0.2
+    pub cross_feed: f64,
+    /// HAAS 效应开关：true 时右声道延迟 8ms 制造空间感，默认 false
+    pub haas_enabled: bool,
+    /// A/B bypass
+    pub bypass: bool,
+}
+
+impl From<crate::stereo_widener::StereoWidenerParams> for JsStereoWidenerParams {
+    fn from(p: crate::stereo_widener::StereoWidenerParams) -> Self {
+        Self {
+            width: p.width as f64,
+            cross_feed: p.cross_feed as f64,
+            haas_enabled: p.haas_enabled,
+            bypass: p.bypass,
+        }
+    }
+}
+
+impl From<JsStereoWidenerParams> for crate::stereo_widener::StereoWidenerParams {
+    fn from(p: JsStereoWidenerParams) -> Self {
+        Self {
+            width: p.width as f32,
+            cross_feed: p.cross_feed as f32,
+            haas_enabled: p.haas_enabled,
+            bypass: p.bypass,
+        }
+    }
+}
+
+/// 响度归一化参数
+#[napi(object)]
+pub struct JsLoudnessNormalizerParams {
+    /// 目标响度（LUFS，简化为 RMS dB），默认 -10.0
+    pub target_lufs: f64,
+    /// 最大增益（dB），默认 9.0
+    pub max_gain_db: f64,
+    /// A/B bypass
+    pub bypass: bool,
+}
+
+impl From<crate::loudness_normalizer::LoudnessNormalizerParams> for JsLoudnessNormalizerParams {
+    fn from(p: crate::loudness_normalizer::LoudnessNormalizerParams) -> Self {
+        Self {
+            target_lufs: p.target_lufs as f64,
+            max_gain_db: p.max_gain_db as f64,
+            bypass: p.bypass,
+        }
+    }
+}
+
+impl From<JsLoudnessNormalizerParams> for crate::loudness_normalizer::LoudnessNormalizerParams {
+    fn from(p: JsLoudnessNormalizerParams) -> Self {
+        Self {
+            target_lufs: p.target_lufs as f32,
+            max_gain_db: p.max_gain_db as f32,
+            bypass: p.bypass,
+        }
+    }
+}
+
+/// 神经网络上采样参数（与 Rust NeuralUpsampleParams 对齐）
+#[napi(object)]
+pub struct JsNeuralUpsampleParams {
+    /// 输入增益（dB），默认 0
+    pub input_gain_db: f64,
+    /// 湿信号混合比例，默认 0.5
+    pub wet_mix: f64,
+    /// A/B bypass
+    pub bypass: bool,
+}
+
+impl From<crate::neural_upsample::NeuralUpsampleParams> for JsNeuralUpsampleParams {
+    fn from(p: crate::neural_upsample::NeuralUpsampleParams) -> Self {
+        Self {
+            input_gain_db: p.input_gain_db as f64,
+            wet_mix: p.wet_mix as f64,
+            bypass: p.bypass,
+        }
+    }
+}
+
+impl From<JsNeuralUpsampleParams> for crate::neural_upsample::NeuralUpsampleParams {
+    fn from(p: JsNeuralUpsampleParams) -> Self {
+        Self {
+            input_gain_db: p.input_gain_db as f32,
+            wet_mix: p.wet_mix as f32,
+            bypass: p.bypass,
+        }
+    }
+}
+
 /// 播放器事件，推送给 JS 侧
 #[napi(object)]
 #[derive(Default)]
@@ -217,6 +410,14 @@ impl AudioPlayer {
     #[napi]
     pub fn set_cover_cache_dir(&self, dir: String) {
         self.inner.lock().set_cover_cache_dir(dir);
+    }
+
+    /// 设置全局代理 URL，对后续创建的 HttpRangeSource 生效
+    /// @param proxyUrl - 完整代理 URL（如 `http://host:port` / `socks5://user:pass@host:port`）；传 null 关闭代理
+    #[napi]
+    pub fn set_proxy(&self, proxy_url: Option<String>) -> Result<()> {
+        crate::http_source::set_global_proxy(proxy_url);
+        Ok(())
     }
 
     /// 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用
@@ -513,6 +714,14 @@ impl AudioPlayer {
         }
     }
 
+    /// 取实际进入 DSP 链的采样率（Hz）
+    /// 高采样率设备 + 高采样率源时保留母带细节（受 MAX_DSP_SAMPLE_RATE 上限约束），
+    /// UI 据此显示真实工作采样率而非 48k 占位
+    #[napi]
+    pub fn get_effective_sample_rate(&self) -> u32 {
+        self.inner.lock().effective_sample_rate()
+    }
+
     /// 启用/禁用 FFT 频谱推送（前端需要显示频谱时启用，不显示时禁用以节省性能）
     #[napi]
     pub fn set_fft_enabled(&self, enabled: bool) {
@@ -523,6 +732,19 @@ impl AudioPlayer {
     #[napi]
     pub fn get_fft_enabled(&self) -> bool {
         self.inner.lock().fft_enabled()
+    }
+
+    /// 启用/禁用 FFT 等响度补偿（BetterLyrics 风格的高频视觉强化）
+    /// 开启后按 bin 中心频率乘增益：20Hz → 1.0，20kHz → 12.0，对数插值
+    #[napi]
+    pub fn set_fft_equal_loudness(&self, enabled: bool) {
+        crate::fft::set_equal_loudness_enabled(enabled);
+    }
+
+    /// 获取 FFT 等响度补偿开关状态
+    #[napi]
+    pub fn get_fft_equal_loudness(&self) -> bool {
+        crate::fft::is_equal_loudness_enabled()
     }
 
     /// 启用/禁用音量归一化（实时响度均衡）
@@ -784,11 +1006,26 @@ impl AudioPlayer {
     /// 配置音频超分（高频激励器）
     /// @param enabled - 是否启用
     /// @param backend - 后端选择（0=CPU, 1=GPU, 2=NPU；GPU/NPU 当前回退到 CPU）
+    /// @param params - 超分参数（高通频率/Q、驱动强度、混合比例、bypass 等）
     #[napi]
-    pub fn set_audio_super_resolution(&self, enabled: bool, backend: u8) {
-        self.inner
-            .lock()
-            .set_super_resolution(enabled, crate::super_resolution::SuperResBackend::from_u8(backend));
+    pub fn set_audio_super_resolution(&self, enabled: bool, backend: u8, params: JsSuperResParams) {
+        self.inner.lock().set_super_resolution(
+            enabled,
+            crate::super_resolution::SuperResBackend::from_u8(backend),
+            params.into(),
+        );
+    }
+
+    /// 仅更新超分参数（不改变 enabled / backend）
+    #[napi]
+    pub fn set_audio_super_resolution_params(&self, params: JsSuperResParams) {
+        self.inner.lock().set_super_resolution_params(params.into());
+    }
+
+    /// 获取音频超分当前参数
+    #[napi]
+    pub fn get_audio_super_resolution_params(&self) -> JsSuperResParams {
+        self.inner.lock().super_resolution_params().into()
     }
 
     /// 获取音频超分当前生效后端（GPU/NPU 不可用时回退为 CPU=0）
@@ -801,6 +1038,135 @@ impl AudioPlayer {
     #[napi]
     pub fn get_audio_super_resolution_enabled(&self) -> bool {
         self.inner.lock().super_resolution_enabled()
+    }
+
+    /// 配置低音增强
+    /// @param enabled - 是否启用
+    /// @param params - 参数（截止频率、增益、Q、bypass）
+    #[napi]
+    pub fn set_bass_enhancer(&self, enabled: bool, params: JsBassEnhancerParams) {
+        self.inner.lock().set_bass_enhancer(enabled, params.into());
+    }
+
+    /// 仅更新低音增强参数
+    #[napi]
+    pub fn set_bass_enhancer_params(&self, params: JsBassEnhancerParams) {
+        self.inner.lock().set_bass_enhancer_params(params.into());
+    }
+
+    /// 获取低音增强当前参数
+    #[napi]
+    pub fn get_bass_enhancer_params(&self) -> JsBassEnhancerParams {
+        self.inner.lock().bass_enhancer_params().into()
+    }
+
+    /// 获取低音增强开关状态
+    #[napi]
+    pub fn get_bass_enhancer_enabled(&self) -> bool {
+        self.inner.lock().bass_enhancer_enabled()
+    }
+
+    /// 配置立体声展宽
+    /// @param enabled - 是否启用
+    /// @param params - 参数（width 0.0~2.0、bypass）
+    #[napi]
+    pub fn set_stereo_widener(&self, enabled: bool, params: JsStereoWidenerParams) {
+        self.inner.lock().set_stereo_widener(enabled, params.into());
+    }
+
+    /// 仅更新立体声展宽参数
+    #[napi]
+    pub fn set_stereo_widener_params(&self, params: JsStereoWidenerParams) {
+        self.inner.lock().set_stereo_widener_params(params.into());
+    }
+
+    /// 获取立体声展宽当前参数
+    #[napi]
+    pub fn get_stereo_widener_params(&self) -> JsStereoWidenerParams {
+        self.inner.lock().stereo_widener_params().into()
+    }
+
+    /// 获取立体声展宽开关状态
+    #[napi]
+    pub fn get_stereo_widener_enabled(&self) -> bool {
+        self.inner.lock().stereo_widener_enabled()
+    }
+
+    /// 配置响度归一化（输出侧实时保护）
+    /// @param enabled - 是否启用
+    /// @param params - 参数（目标 LUFS、最大增益 dB、bypass）
+    #[napi]
+    pub fn set_loudness_normalizer(&self, enabled: bool, params: JsLoudnessNormalizerParams) {
+        self.inner.lock().set_loudness_normalizer(enabled, params.into());
+    }
+
+    /// 仅更新响度归一化参数
+    #[napi]
+    pub fn set_loudness_normalizer_params(&self, params: JsLoudnessNormalizerParams) {
+        self.inner.lock().set_loudness_normalizer_params(params.into());
+    }
+
+    /// 获取响度归一化当前参数
+    #[napi]
+    pub fn get_loudness_normalizer_params(&self) -> JsLoudnessNormalizerParams {
+        self.inner.lock().loudness_normalizer_params().into()
+    }
+
+    /// 获取响度归一化开关状态
+    #[napi]
+    pub fn get_loudness_normalizer_enabled(&self) -> bool {
+        self.inner.lock().loudness_normalizer_enabled()
+    }
+
+    /// 配置神经网络上采样
+    /// @param enabled - 是否启用
+    /// @param backend - 后端选择（0=Fallback 算法兜底，1=ONNX Runtime；Onnx 后端仅在模型加载成功时才生效）
+    /// @param params - 参数（输入增益、湿信号混合比例、bypass）
+    #[napi]
+    pub fn set_neural_upsample(&self, enabled: bool, backend: u8, params: JsNeuralUpsampleParams) {
+        self.inner.lock().set_neural_upsample(
+            enabled,
+            crate::neural_upsample::NeuralBackend::from_u8(backend),
+            params.into(),
+        );
+    }
+
+    /// 仅更新神经网络上采样参数（不改变 enabled / backend）
+    #[napi]
+    pub fn set_neural_upsample_params(&self, params: JsNeuralUpsampleParams) {
+        self.inner.lock().set_neural_upsample_params(params.into());
+    }
+
+    /// 获取神经网络上采样当前参数
+    #[napi]
+    pub fn get_neural_upsample_params(&self) -> JsNeuralUpsampleParams {
+        self.inner.lock().neural_upsample_params().into()
+    }
+
+    /// 获取神经网络上采样当前生效后端（Onnx 模型未加载时回退为 Fallback=0）
+    #[napi]
+    pub fn get_neural_upsample_effective_backend(&self) -> u8 {
+        self.inner.lock().neural_upsample_effective_backend().to_u8()
+    }
+
+    /// 获取神经网络上采样开关状态
+    #[napi]
+    pub fn get_neural_upsample_enabled(&self) -> bool {
+        self.inner.lock().neural_upsample_enabled()
+    }
+
+    /// 尝试加载 ONNX 模型
+    /// @param path - 模型文件绝对路径（如 {userData}/app-data/models/super_res.onnx）
+    /// @returns 加载成功返回 true，失败返回 false（前端可提示用户检查模型文件）
+    #[napi]
+    pub fn load_neural_model(&self, path: String) -> bool {
+        self.inner.lock().load_neural_model(&path).is_ok()
+    }
+
+    /// 取已加载的 ONNX 模型路径（None = 未加载，前端据此显示提示）
+    #[napi]
+    pub fn get_neural_model_path(&self) -> Option<String> {
+        self.inner.lock().neural_model_path()
     }
 }
 
@@ -1109,4 +1475,39 @@ pub async fn write_track_tags(
     })
     .await
     .map_err(|e| Error::from_reason(format!("标签写入任务失败: {e}")))
+}
+
+/// 音频分析结果（BPM / 调式 / LUFS / 人声）
+#[napi(object)]
+pub struct JsAudioAnalysis {
+    /// 节拍速度（BPM），未检测到为 0
+    pub bpm: f64,
+    /// 音乐调式（如 "C major"、"A minor"），未检测到为空串
+    pub key: String,
+    /// 整合响度（LUFS），静音为 -70
+    pub lufs: f64,
+    /// 是否含人声
+    pub has_vocals: bool,
+    /// 人声占比（0.0 ~ 1.0）
+    pub vocal_ratio: f64,
+}
+
+/// 分析整曲音频特征（BPM / 调式 / LUFS / 人声）
+///
+/// 在 tokio 阻塞线程执行，避免阻塞 Node.js 事件循环。
+/// 解码整曲到 8 kHz 立体声 f32 缓冲区，30 分钟上限，超长文件只取前段。
+/// @param source - 音频源（本地路径 / 网络 URL / 加密文件路径）
+#[napi]
+pub async fn analyze_audio_file(source: String) -> Result<JsAudioAnalysis> {
+    let result = tokio::task::spawn_blocking(move || analysis::analyze(&source))
+        .await
+        .map_err(|e| Error::from_reason(format!("分析任务失败: {e}")))?
+        .into_napi()?;
+    Ok(JsAudioAnalysis {
+        bpm: result.bpm as f64,
+        key: result.key,
+        lufs: result.lufs as f64,
+        has_vocals: result.has_vocals,
+        vocal_ratio: result.vocal_ratio as f64,
+    })
 }

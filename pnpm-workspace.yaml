@@ -2,6 +2,7 @@ packages: []
 allowBuilds:
   "@parcel/watcher": false
   better-sqlite3: true
+  core-js: true
   electron: true
   electron-winstaller: true
   esbuild: true

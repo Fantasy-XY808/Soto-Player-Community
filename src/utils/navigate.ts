@@ -69,3 +69,57 @@ export const navigateToPlaylist = (
     query: options.name ? { name: options.name } : undefined,
   });
 };
+
+/**
+ * 跳转到 MV 详情/播放页
+ * @param mvId - MV ID
+ * @param options.name - 标题兜底（用于页面顶部展示，避免详情未拉到时空标题）
+ */
+export const navigateToMv = (mvId: string | undefined, options: { name?: string } = {}) => {
+  if (!mvId?.trim()) return;
+  router.push({
+    name: "mv-detail",
+    params: { id: encodeURIComponent(mvId) },
+    query: options.name ? { name: options.name } : undefined,
+  });
+};
+
+/**
+ * 跳转到视频详情/播放页
+ * @param videoId - 视频 ID
+ * @param options.name - 标题兜底（用于页面顶部展示，避免详情未拉到时空标题）
+ */
+export const navigateToVideo = (videoId: string | undefined, options: { name?: string } = {}) => {
+  if (!videoId?.trim()) return;
+  router.push({
+    name: "Video",
+    params: { id: encodeURIComponent(videoId) },
+    query: options.name ? { name: options.name } : undefined,
+  });
+};
+
+/**
+ * 跳转到动态详情页
+ * @param eventId - 动态 ID
+ */
+export const navigateToEvent = (eventId: string | undefined) => {
+  if (!eventId?.trim()) return;
+  router.push({
+    name: "event-detail",
+    params: { id: encodeURIComponent(eventId) },
+  });
+};
+
+/**
+ * 跳转到电台详情页
+ * @param rid - 电台 ID
+ * @param options.name - 标题兜底（用于页面顶部展示，避免详情未拉到时空标题）
+ */
+export const navigateToRadio = (rid: string | undefined, options: { name?: string } = {}) => {
+  if (!rid?.trim()) return;
+  router.push({
+    name: "radio-detail",
+    params: { id: encodeURIComponent(rid) },
+    query: options.name ? { name: options.name } : undefined,
+  });
+};

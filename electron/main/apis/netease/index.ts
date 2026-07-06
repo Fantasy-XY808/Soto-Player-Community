@@ -18,7 +18,7 @@ import {
 } from "@main/database/sessions";
 import { store } from "@main/store";
 import { coreLog } from "@main/utils/logger";
-import { buildCacheKey, cacheClear, cacheGet, cacheSet } from "./core/cache";
+import { buildCacheKey, cacheClear, cacheClearByName, cacheGet, cacheSet } from "./core/cache";
 import { cookieToJson } from "./core/cookie";
 import { getAnonymousToken } from "./core/device";
 import { createRequest } from "./core/request";
@@ -71,6 +71,7 @@ const NON_CACHEABLE: ReadonlySet<string> = new Set([
   "event",
   "mv_url",
   "dj_detail",
+  "dj_program_url",
 ]);
 
 /** 国内 IP 前缀池 */
@@ -132,6 +133,16 @@ export const clearNeteaseCookies = (): void => {
   sessionCache = {};
   clearSessionCookies("netease");
   cacheClear();
+};
+
+/**
+ * 按接口名清除该接口的内存缓存
+ *
+ * 用于发送 / 删除评论后让 comment_music 缓存立即失效，避免 2 分钟 TTL 阻塞新评论可见性
+ * @param name 接口名（如 "comment_music"）
+ */
+export const invalidateNeteaseCache = (name: string): void => {
+  cacheClearByName(name);
 };
 
 /**

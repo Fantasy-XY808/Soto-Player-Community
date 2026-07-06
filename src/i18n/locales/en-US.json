@@ -16,7 +16,7 @@
     "finish": "Finish",
     "footer": "You can adjust anything skipped here anytime in Settings",
     "welcome": {
-      "title": "Welcome to Soto-Player Community",
+      "title": "Welcome to Soto Player-Community",
       "subtitle": "A modern desktop music player — a few quick steps and you're ready",
       "start": "Get Started",
       "features": {
@@ -47,7 +47,7 @@
     },
     "library": {
       "title": "Local Music Library",
-      "subtitle": "Add folders to scan and Soto-Player Community will index them automatically. You can add more later."
+      "subtitle": "Add folders to scan and Soto Player-Community will index them automatically. You can add more later."
     },
     "streaming": {
       "title": "Streaming Servers",
@@ -67,9 +67,33 @@
       "modeLabel": "Theme Mode",
       "colorLabel": "Accent Color"
     },
+    "effects": {
+      "title": "Player Visual Effects",
+      "subtitle": "Pick a preset or toggle each effect individually. Low-end devices should choose Performance.",
+      "performanceMode": "Performance",
+      "performanceDesc": "Fluid background + parallax tilt + cover breathing only — for older hardware",
+      "fullMode": "Full",
+      "fullDesc": "All effects on: fluid / snow / fog / raindrop / spectrum / parallax / breathing",
+      "enableAll": "Enable All",
+      "disableAll": "Disable All",
+      "fluid": "Fluid Background",
+      "fluidDesc": "Cover-tinted fluid animation",
+      "snow": "Snow",
+      "snowDesc": "Falling snow overlay",
+      "fog": "Fog",
+      "fogDesc": "Slowly drifting fog layer",
+      "raindrop": "Raindrop",
+      "raindropDesc": "Glass-window raindrop effect",
+      "spectrum": "Spectrum",
+      "spectrumDesc": "Bottom + around-cover spectrum visualizer",
+      "parallax": "Parallax Tilt",
+      "parallaxDesc": "Cover tilts in 3D with cursor",
+      "breathing": "Cover Breathing",
+      "breathingDesc": "Bass-driven cover pulse"
+    },
     "migration": {
       "title": "Data Migration",
-      "subtitle": "Legacy SPlayer-Next user data detected. Migrate it to Soto-Player Community?",
+      "subtitle": "Legacy SPlayer-Next user data detected. Migrate it to Soto Player-Community?",
       "warning": "Migration overwrites your current settings, library, cache and plugin data. Choose carefully. You can run it again from «Settings → General → Data Migration»",
       "itemConfig": "Config files (settings, streaming credentials, Last.fm credentials)",
       "itemDatabase": "Music library database (local index and play history)",
@@ -84,7 +108,7 @@
     },
     "hotkeys": {
       "title": "Keyboard Shortcuts",
-      "subtitle": "Soto-Player Community ships with complete playback shortcuts you can use whenever you need them.",
+      "subtitle": "Soto Player-Community ships with complete playback shortcuts you can use whenever you need them.",
       "tips": {
         "global": {
           "title": "Global shortcuts",
@@ -113,6 +137,7 @@
     "loading": "Loading",
     "noData": "No data",
     "noMore": "No more ~",
+    "unavailable": "Unavailable",
     "refreshCache": "Refresh cache",
     "copied": "Copied",
     "copyFailed": "Copy failed",
@@ -225,7 +250,8 @@
       "quick": "Quick",
       "history": "Recent searches",
       "hot": "Trending"
-    }
+    },
+    "automix": "Automix"
   },
   "home": {
     "greetingLine": "{greeting}, {name}",
@@ -366,7 +392,42 @@
     "platformQQMusic": "QQ Music",
     "platformKugou": "Kugou Music",
     "platformQishui": "Qishui Music",
-    "platformComingSoon": "{platform} account login is coming soon"
+    "platformComingSoon": "{platform} account login is coming soon",
+    "cookieInvalidQq": "Invalid cookie: must contain uin and qm_keyst",
+    "cookieInvalidKugou": "Invalid cookie: must contain kg_mid and vip_token",
+    "cookieHintQq": "Only uin and qm_keyst fields are required, e.g. uin=o1234567890; qm_keyst=xxxx;",
+    "cookieHintKugou": "Only kg_mid and vip_token fields are required, e.g. kg_mid=xxxx; vip_token=yyyy;",
+    "cookiePlaceholderQq": "Paste cookie, at least uin=xxx; qm_keyst=xxx;",
+    "cookiePlaceholderKugou": "Paste cookie, at least kg_mid=xxx; vip_token=xxx;",
+    "cookieExpiredHint": "Cookie may have expired, please sign in again",
+    "qishuiPluginHint": "Qishui music requires a third-party plugin. Go to Settings → Plugins"
+  },
+  "account": {
+    "qq": {
+      "title": "QQ Music Account",
+      "description": "Sign in to play VIP and restricted tracks"
+    },
+    "kugou": {
+      "title": "Kugou Music Account",
+      "description": "Sign in to play VIP and restricted tracks"
+    },
+    "qishui": {
+      "title": "Qishui Music",
+      "description": "Qishui music requires a third-party plugin. Click below to open plugin settings",
+      "openPlugins": "Open Plugin Settings",
+      "installed": "Plugin ready"
+    },
+    "switcher": {
+      "title": "Account Switcher",
+      "subtitle": "Logged-in accounts",
+      "refresh": "Refresh",
+      "noLogin": "Not signed in",
+      "vip": "VIP",
+      "playlists": "Playlists",
+      "likedSongs": "Liked",
+      "empty": "No platform account signed in",
+      "openSettings": "Open Settings"
+    }
   },
   "search": {
     "title": "Search",
@@ -379,7 +440,8 @@
       "songs": "Songs",
       "albums": "Albums",
       "artists": "Artists",
-      "playlists": "Playlists"
+      "playlists": "Playlists",
+      "mvs": "MV"
     }
   },
   "streaming": {
@@ -463,6 +525,7 @@
       "hint": "Positive values advance lyrics, in milliseconds"
     },
     "lyricCredit": "Lyrics by",
+    "effectAutoDowngradeToast": "Low FPS detected; auto-disabled: {effects}",
     "copyLyric": {
       "title": "Copy Lyrics",
       "contentLabel": "Content to copy",
@@ -527,7 +590,13 @@
     "reply": "Reply",
     "hotLoading": "Loading hot comments…",
     "hotLoadFailed": "Failed to load hot comments (network or rate-limited)",
-    "retry": "Retry"
+    "retry": "Retry",
+    "expandReplies": "Show {count} replies",
+    "collapseReplies": "Collapse replies",
+    "loadingReplies": "Loading replies…",
+    "repliesFailed": "Failed to load replies",
+    "loadMoreHot": "Load more hot comments",
+    "moreHot": "More hot comments"
   },
   "songList": {
     "title": "Title",
@@ -566,6 +635,7 @@
       "download": "Download Song",
       "deleteFile": "Delete File",
       "searchSame": "Search by Name",
+      "viewMv": "View MV",
       "more": "More",
       "copyTitle": "Copy Title",
       "copyId": "Copy Song ID",
@@ -587,7 +657,8 @@
       "fileConfirm": "Permanently delete {count} files from disk? This cannot be undone"
     },
     "toast": {
-      "addedToNext": "Added to play next"
+      "addedToNext": "Added to play next",
+      "noMv": "No MV available for this song"
     }
   },
   "quality": {
@@ -768,7 +839,8 @@
       "integrations": "Integrations",
       "hotkeys": "Hotkeys",
       "plugins": "Plugins",
-      "about": "About"
+      "about": "About",
+      "automix": "Automix"
     },
     "section": {
       "network": "Network & Proxy",
@@ -806,13 +878,19 @@
       "audioSuperRes": "Audio Super-Resolution",
       "hotkeys": "Hotkeys",
       "musicSpectrum": "Music Spectrum",
+      "controlEnhance": "Control Visibility",
       "discord": "Discord RPC",
       "lastfm": "Last.fm",
       "externalApi": "External API",
       "listenTogether": "Listen Together",
       "systemConfig": "System",
+      "proxy": "Proxy",
       "pluginsList": "Installed Plugins",
       "streaming": "Streaming",
+      "qqAccount": "QQ Music Account",
+      "kugouAccount": "Kugou Music Account",
+      "qishuiPlugin": "Qishui Music (Plugin)",
+      "songUnlockServer": "Song Unlock Sources",
       "songCache": "Song Cache",
       "downloadLocation": "Download Settings",
       "downloadGeneral": "Download Options",
@@ -821,11 +899,14 @@
       "database": "Database",
       "backupReset": "Backup & Reset",
       "migration": "Data Migration",
-      "debug": "Debug"
+      "debug": "Debug",
+      "automixMain": "Auto Mix",
+      "automixTransition": "Transition",
+      "automixAnalysis": "Audio Analysis"
     },
     "migration": {
       "title": "Migrate SPlayer-Next Data",
-      "description": "Migrate configuration, library, cache and plugin data from the legacy SPlayer-Next to Soto-Player Community. This will overwrite your current data — choose carefully.",
+      "description": "Migrate configuration, library, cache and plugin data from the legacy SPlayer-Next to Soto Player-Community. This will overwrite your current data — choose carefully.",
       "noLegacy": "No SPlayer-Next user data detected",
       "start": "Start Migration",
       "confirmTitle": "Confirm Migration",
@@ -844,9 +925,10 @@
       "newVersion": "Update Available",
       "openLogs": "Open Logs",
       "officialSite": "Official Site",
+      "qqGroup": "QQ Group 1043061896",
       "showMore": "More Contributors",
       "collapse": "Collapse",
-      "description": "Soto-Player Community — a community fork of SPlayer-Next, retaining the native audio engine.",
+      "description": "Soto Player-Community — a community fork of SPlayer-Next, retaining the native audio engine. Listen Together is powered by EasyTier for cross-LAN P2P tunneling.",
       "visualInspiration": "Visual inspiration partly from BetterLyrics and other community projects",
       "role": {
         "author": "Author"
@@ -894,6 +976,129 @@
       "cpu": "CPU",
       "gpu": "GPU (fallback CPU)",
       "npu": "NPU (fallback CPU)"
+    },
+    "audioSuperResolutionParams": {
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass super-resolution processing for A/B comparison"
+      },
+      "hpFreq": {
+        "label": "High-Pass Cutoff"
+      },
+      "hpQ": {
+        "label": "High-Pass Q"
+      },
+      "drive": {
+        "label": "1st Harmonic Drive"
+      },
+      "h2Drive": {
+        "label": "2nd Harmonic Drive"
+      },
+      "h2Mix": {
+        "label": "2nd Harmonic Mix"
+      },
+      "wetMix": {
+        "label": "Wet Mix"
+      },
+      "inputLimit": {
+        "label": "Input Limit"
+      }
+    },
+    "bassEnhancer": {
+      "label": "Bass Enhancer",
+      "description": "2nd-order low-shelf filter + tanh soft saturation for punchier bass",
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass bass enhancement for A/B comparison"
+      },
+      "freq": {
+        "label": "Cutoff Frequency"
+      },
+      "gainDb": {
+        "label": "Gain"
+      },
+      "q": {
+        "label": "Q"
+      }
+    },
+    "stereoWidener": {
+      "label": "Stereo Widener",
+      "description": "Mid-Side processing: >1 widens the stereo field, <1 narrows it",
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass widening for A/B comparison"
+      },
+      "width": {
+        "label": "Width"
+      }
+    },
+    "loudnessNormalizer": {
+      "label": "Loudness Normalizer",
+      "description": "500ms sliding-window RMS estimate with attack/release smoothing; prevents clipping after DSP chain",
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass loudness normalization for A/B comparison"
+      },
+      "targetLufs": {
+        "label": "Target Loudness"
+      },
+      "maxGainDb": {
+        "label": "Max Gain"
+      }
+    },
+    "neuralUpsample": {
+      "label": "Neural Upsampling",
+      "description": "Framework-ready + algorithmic fallback: passes through when no ONNX model is loaded; real super-resolution after model is loaded",
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass neural processing for A/B comparison"
+      },
+      "backend": {
+        "label": "Inference Backend",
+        "description": "Fallback = passthrough (default), ONNX = real inference after model loaded"
+      },
+      "modelPath": {
+        "label": "ONNX Model Path",
+        "description": "Pick a local ONNX model file; framework stage only validates file existence",
+        "placeholder": "Enter or pick a .onnx model file path",
+        "load": "Load Model",
+        "empty": "Model path cannot be empty",
+        "loaded": "Model loaded",
+        "notLoaded": "Model not loaded (passthrough)"
+      },
+      "inputGainDb": {
+        "label": "Input Gain"
+      },
+      "wetMix": {
+        "label": "Wet Mix"
+      }
+    },
+    "neuralUpsampleBackend": {
+      "fallback": "Fallback Passthrough",
+      "onnx": "ONNX Inference"
+    },
+    "spatialAudio": {
+      "label": "Spatial Audio",
+      "description": "Combo preset: enables stereo widening + bass boost + high-frequency super-resolution together for an immersive wraparound feel",
+      "bypass": {
+        "label": "A/B Bypass",
+        "description": "Temporarily bypass the spatial preset and fall back to per-DSP settings"
+      },
+      "width": {
+        "label": "Stereo Width"
+      },
+      "bassGainDb": {
+        "label": "Bass Gain"
+      },
+      "bassFreq": {
+        "label": "Bass Cutoff"
+      },
+      "superResDrive": {
+        "label": "Super-Res Drive"
+      },
+      "superResWetMix": {
+        "label": "Super-Res Wet"
+      }
     },
     "songLevel": {
       "label": "Online Audio Quality",
@@ -1087,6 +1292,10 @@
       "label": "Auto Center Cover",
       "description": "Center cover and hide lyric area when no lyrics available"
     },
+    "mirrorLayout": {
+      "label": "Mirror Layout",
+      "description": "Swap cover and lyric positions (disabled when cover is centered)"
+    },
     "showPureMusicComment": {
       "label": "Pure Music Hot Comment",
       "description": "Show a random hot comment in lyric area for pure music (mutually exclusive with Auto Center Cover; hot comment wins when both on)"
@@ -1141,6 +1350,10 @@
       "label": "Raindrop Layer",
       "description": "Overlay slanted raindrops falling on the background"
     },
+    "enableEffectAutoDowngrade": {
+      "label": "Auto-Downgrade Effects",
+      "description": "Automatically disable fluid/fog background and cover depth of field on sustained low FPS to keep playback smooth; manual re-enable disables auto-downgrade for the session"
+    },
     "enableParallaxTilt": {
       "label": "Cover Parallax Tilt",
       "description": "Cover tilts slightly following mouse movement for a 3D parallax effect"
@@ -1148,6 +1361,56 @@
     "enableCoverBreathing": {
       "label": "Cover Breathing Effect",
       "description": "Cover gently pulses with a scaling animation while playing"
+    },
+    "controlEnhanceMode": {
+      "label": "Control Visibility Enhancement",
+      "description": "Enable when controls are hard to see on light backgrounds",
+      "none": "Off",
+      "background": "Background Backdrop",
+      "outline": "Outline",
+      "auto": "Smart Auto"
+    },
+    "controlBackgroundStyle": {
+      "label": "Background Material",
+      "description": "Material effect of control background",
+      "blur": "Blur",
+      "acrylic": "Acrylic",
+      "mica": "Mica"
+    },
+    "controlOutlineStyle": {
+      "label": "Outline Style",
+      "description": "Visual effect of control outline",
+      "thin": "Thin",
+      "shadow": "Shadow",
+      "glow": "Glow"
+    },
+    "audioSuperResolution": {
+      "label": "Audio Super Resolution",
+      "description": "Upsample audio to enhance high-frequency detail"
+    },
+    "streamingServerList": {
+      "label": "Streaming Servers",
+      "description": "Manage Subsonic / Jellyfin / Emby servers"
+    },
+    "qqAccountCard": {
+      "label": "QQ Music Account",
+      "description": "Log in to QQ Music for higher quality"
+    },
+    "kugouAccountCard": {
+      "label": "Kugou Music Account",
+      "description": "Log in to Kugou Music for higher quality"
+    },
+    "qishuiPluginHint": {
+      "label": "Qishui Music (Plugin)",
+      "description": "Access Qishui music source via plugin"
+    },
+    "lastfmAccount": {
+      "label": "Last.fm Account",
+      "description": "Connect Last.fm account to sync scrobbles"
+    },
+    "migrationPanel": {
+      "label": "Data Migration",
+      "description": "Migrate data from old version to new version"
     },
     "enableFanLyrics": {
       "label": "Fan Lyrics",
@@ -1181,6 +1444,10 @@
       "label": "Line Background",
       "description": "Add a translucent rounded background to each lyric line"
     },
+    "fanLyricsAlwaysShowActiveBg": {
+      "label": "Always Show Active BG",
+      "description": "Always show background on the active line, no hover needed"
+    },
     "fanLyricsEnableGlow": {
       "label": "Long Syllable Glow",
       "description": "Add glow to syllables longer than 1s; nearby characters also get a slight halo"
@@ -1203,6 +1470,36 @@
       "bar": "Bar",
       "curve": "Curve",
       "around": "Around Cover"
+    },
+    "spectrumBreathing": {
+      "label": "Spectrum Breathing",
+      "description": "Low-frequency driven overall spectrum scaling, creates beat breathing feel (BetterLyrics style)"
+    },
+    "spectrumBreathingIntensity": {
+      "label": "Breathing Intensity",
+      "description": "Maximum spectrum scale ratio, up to 1.8x at 100"
+    },
+    "spectrumBrightness": {
+      "label": "Spectrum Brightness",
+      "description": "Fixed spectrum brightness, stacks with smart dim mode"
+    },
+    "spectrumSmartDim": {
+      "label": "Smart Dim",
+      "description": "When hovering over player controls, spectrum dims and desaturates to highlight controls"
+    },
+    "fftEqualLoudness": {
+      "label": "Equal-Loudness Compensation",
+      "description": "High-frequency visual boost (BetterLyrics style: 20Hz gain=1.0 → 20kHz gain=12.0 log-interpolated) to reveal high-frequency overtones"
+    },
+    "spectrumColorMode": {
+      "label": "Spectrum Color",
+      "description": "Follow cover color or use a custom color",
+      "cover": "Follow Cover",
+      "custom": "Custom"
+    },
+    "spectrumCustomColor": {
+      "label": "Custom Color",
+      "description": "Custom spectrum color"
     },
     "showTranslation": {
       "label": "Show Translation",
@@ -1419,7 +1716,10 @@
     },
     "dynamicIslandSpectrumStyle": {
       "label": "Spectrum Style",
-      "description": "Visual style of spectrum bars"
+      "description": "Visual style of spectrum bars",
+      "gradient": "Gradient",
+      "solid": "Solid",
+      "minimal": "Minimal"
     },
     "dynamicIslandEnableExpandedView": {
       "label": "Enable Expanded View",
@@ -1460,6 +1760,26 @@
     "dynamicIslandEnableCoverFlip": {
       "label": "Cover Flip Animation",
       "description": "3D flip transition effect when switching songs"
+    },
+    "dynamicIslandMotionBlur": {
+      "label": "Motion Blur",
+      "description": "Apply velocity-based blur during resize/expand for smoother animation"
+    },
+    "dynamicIslandAutoHide": {
+      "label": "Auto Hide",
+      "description": "Collapse to a small handle after a period of inactivity"
+    },
+    "dynamicIslandAutoHideDelay": {
+      "label": "Auto Hide Delay",
+      "description": "How long to wait before auto-hiding"
+    },
+    "dynamicIslandSuppressFullscreen": {
+      "label": "Hide on Fullscreen",
+      "description": "Hide the dynamic island when the foreground window is fullscreen to avoid covering games/video players"
+    },
+    "dynamicIslandAutoStart": {
+      "label": "Launch at Login",
+      "description": "Launch SPlayer at system startup (controls the entire app, not just the dynamic island)"
     },
     "taskbarLyricEnabled": {
       "label": "Enable Taskbar Lyric",
@@ -1539,6 +1859,14 @@
       "solid": "Solid",
       "animation": "Fluid"
     },
+    "playerBgPreset": {
+      "label": "Background Style",
+      "description": "Choose a preset style for the fluid background; select Custom to adjust all parameters manually",
+      "soft": "Soft",
+      "vivid": "Vivid",
+      "intense": "Intense",
+      "custom": "Custom"
+    },
     "playerBgFlowSpeed": {
       "label": "Flow Speed",
       "description": "Animation flow speed of the fluid background"
@@ -1558,6 +1886,18 @@
     "playerBgBeat": {
       "label": "Beat Pulse",
       "description": "Make the fluid background pulse with the low-frequency beat of the music"
+    },
+    "playerBgBrightness": {
+      "label": "Brightness",
+      "description": "Display brightness of the fluid background; 1.0 is the original brightness"
+    },
+    "playerBgSaturation": {
+      "label": "Saturation",
+      "description": "Color saturation of the fluid background; 1.0 is the original saturation"
+    },
+    "playerBgContrast": {
+      "label": "Contrast",
+      "description": "Light-dark contrast of the fluid background; 1.0 is the original contrast"
     },
     "coverLayout": {
       "label": "Cover Layout",
@@ -1636,9 +1976,19 @@
       "label": "Show Playlist Covers",
       "description": "Show playlist covers instead of default icons in the sidebar"
     },
-    "coverDepthOfField": {
-      "label": "Cover Depth of Field",
-      "description": "Overlay a fullscreen blurred cover copy as the player background; stronger bass deepens the blur"
+    "coverParallax": {
+      "label": "Fullscreen Cover Parallax",
+      "description": "Cover follows mouse movement under fullscreen cover layout"
+    },
+    "coverParallaxIntensity": {
+      "label": "Parallax Intensity",
+      "description": "Adjust cover translation and tilt amplitude"
+    },
+    "coverParallaxMode": {
+      "label": "Parallax Mode",
+      "description": "Plane: 2D translate; Multi: experimental multi-dimensional perspective tilt",
+      "plane": "Plane",
+      "multi": "Multi"
     },
     "showQualitySwitch": {
       "label": "Show Quick Quality Switch",
@@ -1760,6 +2110,50 @@
       "label": "Wake this app via the Orpheus protocol",
       "description": "This protocol is normally used by the web player to launch the official client; enabling it may prevent the official client from being launched"
     },
+    "preventSleep": {
+      "label": "Prevent system sleep while playing",
+      "description": "Active only during playback; released on pause or stop"
+    },
+    "proxyProtocol": {
+      "label": "Proxy protocol",
+      "description": "Applied to netease audio requests and the native audio engine HTTP streamer",
+      "protocol": {
+        "off": "Direct",
+        "http": "HTTP",
+        "https": "HTTPS",
+        "socks5": "SOCKS5"
+      }
+    },
+    "proxyHost": {
+      "label": "Host",
+      "description": "Proxy server hostname or IP address"
+    },
+    "proxyPort": {
+      "label": "Port",
+      "description": "Proxy server listen port (1–65535)"
+    },
+    "proxyUsername": {
+      "label": "Username",
+      "description": "Leave empty if the proxy does not require authentication"
+    },
+    "proxyPassword": {
+      "label": "Password",
+      "description": "Leave empty if the proxy does not require authentication"
+    },
+    "songUnlockServer": {
+      "netease": {
+        "name": "GD Music Station",
+        "desc": "Aggregator with high hit rate; uses music-api.gdstudio.xyz public API"
+      },
+      "kuwo": {
+        "name": "Kuwo Music",
+        "desc": "Kuwo search + mobi endpoint; DES-encrypted params"
+      },
+      "bodian": {
+        "name": "Bodian Music",
+        "desc": "Kuwo search + bd-api stream; requires SHA-256+MD5 signing"
+      }
+    },
     "streamingEnabled": {
       "label": "Enable streaming",
       "description": "When disabled, the streaming entry is hidden from the sidebar"
@@ -1830,7 +2224,7 @@
     },
     "listenTogether": {
       "panelTitle": "Session Status",
-      "panelHint": "Create or join a session on the Listen Together page; public access requires your own tunnel setup",
+      "panelHint": "Create or join a session on the Listen Together page; cross-LAN access is handled by the embedded EasyTier virtual network",
       "runningAsHost": "Hosting as: {address}",
       "runningAsClient": "Connected to: {url}",
       "idle": "Not active",
@@ -2064,6 +2458,53 @@
       "button": "Clear All",
       "confirmTitle": "Clear all database caches?",
       "confirmDesc": "All database caches above will be cleared. This cannot be undone."
+    },
+    "automixEnabled": {
+      "label": "Enable Automix",
+      "description": "Auto-pick the next track based on BPM and key as the current one nears its end"
+    },
+    "automixStrategy": {
+      "label": "Pick Strategy",
+      "description": "BPM+Key (recommended) / BPM only / Key only / Random",
+      "strategy": {
+        "bpmKey": "BPM + Key",
+        "bpm": "BPM only",
+        "key": "Key only",
+        "random": "Random"
+      }
+    },
+    "automixBpmTolerance": {
+      "label": "BPM Tolerance",
+      "description": "Max BPM difference allowed between candidates and the current track; 0 = no limit"
+    },
+    "automixKeyMatchMode": {
+      "label": "Key Match Mode",
+      "description": "Camelot Wheel compatibility; strict mode only allows exact same key",
+      "mode": {
+        "off": "Off",
+        "camelot": "Camelot Wheel",
+        "strict": "Strict"
+      }
+    },
+    "automixCrossfadeEnabled": {
+      "label": "Crossfade Transition",
+      "description": "Fade volume to 0 before switching, then fade back to the original level"
+    },
+    "automixCrossfadeMs": {
+      "label": "Transition Duration",
+      "description": "How many milliseconds before the end to trigger the switch; longer = smoother"
+    },
+    "automixCandidatePoolSize": {
+      "label": "Candidate Pool Size",
+      "description": "How many upcoming tracks to consider; larger = better match but slower to analyze"
+    },
+    "automixAutoAnalyze": {
+      "label": "Auto Analyze",
+      "description": "Automatically analyze tracks that haven't been analyzed yet"
+    },
+    "automixAutoRecommend": {
+      "label": "Auto Recommend (Coming Soon)",
+      "description": "Recommend new tracks based on similarity when the candidate pool runs out"
     }
   },
   "collection": {
@@ -2106,7 +2547,16 @@
   "radio": {
     "title": "Radio",
     "subtitle": "Featured podcasts and radio stations, hear more voices",
-    "empty": "No radio content yet"
+    "empty": "No radio content yet",
+    "detail": {
+      "loading": "Loading…",
+      "errorTitle": "Load failed",
+      "notFound": "Radio not found",
+      "badge": "Radio",
+      "programCount": "{count} episodes",
+      "subCount": "{count} subscribers",
+      "emptyPrograms": "No episodes yet"
+    }
   },
   "mv": {
     "title": "MV",
@@ -2119,13 +2569,48 @@
       "western": "Western",
       "japan": "Japan",
       "korea": "Korea"
+    },
+    "detail": {
+      "loading": "Loading…",
+      "errorTitle": "Load failed",
+      "notFound": "MV not found",
+      "noUrl": "No playable URL; may require sign-in or VIP"
+    }
+  },
+  "video": {
+    "title": "Video",
+    "loading": "Loading…",
+    "errorTitle": "Load failed",
+    "notFound": "Video not found",
+    "noUrl": "No playable URL; may require sign-in or VIP",
+    "playing": "Playing",
+    "paused": "Paused",
+    "relatedVideos": "Related Videos",
+    "quality": {
+      "high": "1080P",
+      "medium": "720P",
+      "low": "480P",
+      "standard": "240P"
+    },
+    "actions": {
+      "like": "Like",
+      "collect": "Save",
+      "share": "Share"
+    },
+    "toast": {
+      "liked": "Liked",
+      "unliked": "Unliked",
+      "collected": "Added to favorites",
+      "uncollected": "Removed from favorites"
     }
   },
   "events": {
     "title": "Events",
     "subtitle": "Latest updates from artists and friends you follow",
     "empty": "No events yet",
-    "needLogin": "Sign in to view events from artists you follow"
+    "needLogin": "Sign in to view events from artists you follow",
+    "detailTitle": "Event Detail",
+    "notFound": "Event not found"
   },
   "album": {
     "label": "Albums"
@@ -2178,7 +2663,7 @@
   },
   "listenTogether": {
     "title": "Listen Together",
-    "subtitle": "Sync-listen to the same song with friends",
+    "subtitle": "Sync-listen to the same song with friends (powered by EasyTier P2P tunneling)",
     "role": {
       "idle": "Disconnected",
       "host": "Host",
@@ -2202,18 +2687,32 @@
       "passwordLabel": "Session Password",
       "passwordPlaceholder": "Clients must enter this to join",
       "passwordHint": "Empty means no password; setting one is recommended to keep strangers out",
+      "permissionsLabel": "Client Permissions",
+      "allowClientPause": "Allow pause / play",
+      "allowClientSkip": "Allow skip",
+      "allowClientEditQueue": "Allow queue editing",
       "portLabel": "Listen Port",
       "portHint": "Clients must use the same port; change it if there is a conflict",
-      "tunnelHint": "Discoverable on LAN automatically; public access requires your own tunnel (e.g. frp / ngrok / zerotier) forwarding to this IP and port",
+      "tunnelHint": "Host generates a 6-digit share code on start; friends on the same LAN or cross-network can join. Cross-network uses EasyTier SOCKS5 proxy, no admin privileges required",
+      "lanOnlyLabel": "LAN Only",
+      "lanOnlyHint": "When enabled, only friends on the same LAN can join; EasyTier cross-network tunneling is disabled. Disable to allow cross-network join",
+      "easyTierTitle": "EasyTier Cross-Network",
+      "easyTierHint": "EasyTier binary is embedded — no extra install needed. Both ends use --no-tun mode; client connects to host virtual IP via SOCKS5 proxy for cross-network sync, no admin privileges required",
+      "easyTierVirtualIp": "Virtual IP: {ip}",
+      "easyTierWaitingIp": "Waiting for virtual IP…",
+      "easyTierNotStarted": "Not started",
+      "shareCodeLabel": "Share Code",
+      "shareCodeCopied": "Invite copied",
       "start": "Start",
       "started": "Host started: {address}",
       "startFailed": "Failed to start host",
       "stopped": "Host stopped",
       "addressLabel": "Session Address",
-      "addressHint": "Share this with friends; use your tunnel address for public access",
-      "copy": "Copy",
+      "addressHint": "Share this address and the share code with friends; same-LAN friends need only the address, cross-LAN friends need both",
+      "copy": "Copy Invite",
       "copied": "Address copied",
       "copyFailed": "Copy failed",
+      "inviteText": "Open Soto Player-Community's Listen Together and join me!\nRoom address: {address}\nShare code: {code}",
       "stop": "Stop",
       "membersTitle": "Connected Members",
       "membersCount": "{count} connected",
@@ -2230,12 +2729,16 @@
       "discoveredLabel": "LAN Auto-Discovery",
       "discoveredEmpty": "No sessions found; enter the address manually",
       "locked": "Locked",
+      "open": "Open",
       "urlLabel": "Host Address",
       "urlPlaceholder": "host:port, ws://host:port, or wss://host:port",
       "urlHint": "LAN or public tunnel address supported; wss:// for TLS-enabled tunnels",
       "urlRequired": "Please enter the host address",
       "passwordLabel": "Session Password",
       "passwordPlaceholder": "Required if the host set a password",
+      "shareCodeLabel": "Share Code",
+      "shareCodePlaceholder": "6-digit share code from the host (required for cross-LAN)",
+      "shareCodeHint": "When provided, EasyTier is started automatically to join the virtual network — works across LANs",
       "join": "Join",
       "joined": "Joined session",
       "failed": "Failed to join",
@@ -2243,7 +2746,40 @@
       "leave": "Leave",
       "connectedTo": "Connected to",
       "hostUrl": "Host URL",
-      "latency": "Latency"
+      "latency": "Latency",
+      "membersTitle": "Session Members",
+      "membersLoading": "Waiting for host to sync member list…",
+      "pauseDisabled": "Host has disabled pause / play",
+      "skipDisabled": "Host has disabled skipping",
+      "editQueueDisabled": "Host has disabled queue editing"
     }
+  },
+  "automix": {
+    "title": "Automix",
+    "subtitle": "Smart track transition based on BPM and key",
+    "notEnabled": "Automix is off",
+    "notEnabledHint": "Enable it in Settings → Automix to start auto-mixing",
+    "goSettings": "Open Settings",
+    "currentTrack": "Current Track",
+    "noCurrent": "Not playing",
+    "bpm": "BPM",
+    "key": "Key",
+    "lufs": "LUFS",
+    "vocals": "Vocals",
+    "yes": "Yes",
+    "no": "No",
+    "unknown": "Unknown",
+    "lastPick": "Last Pick",
+    "noPick": "No pick has been triggered yet",
+    "preview": "Preview Next Pick",
+    "previewing": "Picking...",
+    "pool": "Candidate Pool",
+    "poolEmpty": "Candidate pool is empty",
+    "prefetch": "Prefetch Analysis",
+    "prefetching": "Analyzing {done}/{total}",
+    "prefetchDone": "Analysis complete",
+    "reason": "Reason",
+    "active": "Active",
+    "inactive": "Stopped"
   }
 }

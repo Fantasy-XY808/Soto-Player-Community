@@ -18,6 +18,8 @@ const { refreshLocalUser, joinSession, startBrowse, stopBrowse, discoveredSessio
 const hostUrl = ref("");
 /** 会话口令 */
 const password = ref("");
+/** 分享码（可选；填入后自动启动 EasyTier 加入虚拟网络） */
+const shareCode = ref("");
 /** 本地账号状态 */
 const localUser = ref<{ name: string; level: "default" | "vip" } | null>(null);
 const checking = ref(false);
@@ -29,9 +31,15 @@ const lastHostUrl = computed<string>({
   set: (v) => settings.setSystem("listenTogether.lastHostUrl", v),
 });
 
-/** 自动发现列表（按最近发现时间倒序） */
+/** 自动发现列表（无口令房间优先，再按最近发现时间倒序） */
 const sortedSessions = computed<ListenTogetherDiscoveredSession[]>(() =>
-  [...discoveredSessions.value].sort((a, b) => b.lastSeen - a.lastSeen),
+  [...discoveredSessions.value].sort((a, b) => {
+    // 无口令房间排前面，方便用户直接加入
+    if (a.txt.hasPassword !== b.txt.hasPassword) {
+      return a.txt.hasPassword ? 1 : -1;
+    }
+    return b.lastSeen - a.lastSeen;
+  }),
 );
 
 /** 自检 + 启动 mDNS 浏览 */
@@ -47,9 +55,16 @@ const init = async (): Promise<void> => {
   startBrowse();
 };
 
-/** 选中某个发现条目 */
+/** 选中某个发现条目
+ *
+ * 此前只填 hostUrl 不重置 shareCode/password，导致用户从"带口令房间 A"切换到
+ * "无口令房间 B"时 shareCode/password 仍保留旧值，加入时被旧口令拒绝。
+ * 现在切换发现条目时清空口令与分享码（用户按需重新输入）。
+ */
 const selectDiscovered = (session: ListenTogetherDiscoveredSession): void => {
   hostUrl.value = `${session.host}:${session.port}`;
+  password.value = "";
+  shareCode.value = "";
 };
 
 /** 加入会话 */
@@ -69,7 +84,9 @@ const handleJoin = async (): Promise<void> => {
     if (!/^wss?:\/\//.test(url)) {
       url = `ws://${url}`;
     }
-    const result = await joinSession(url, password.value);
+    // 分享码归一化：大写、去空格
+    const code = shareCode.value.trim().toUpperCase() || undefined;
+    const result = await joinSession(url, password.value, code);
     if (result.ok) {
       lastHostUrl.value = hostUrl.value.trim();
       toast.success(t("listenTogether.join.joined"));
@@ -77,6 +94,10 @@ const handleJoin = async (): Promise<void> => {
     } else {
       toast.error(result.error ?? t("listenTogether.join.failed"));
     }
+  } catch (err) {
+    // IPC 框架异常兜底
+    console.error("joinSession IPC reject:", err);
+    toast.error(t("listenTogether.join.failed"));
   } finally {
     joining.value = false;
   }
@@ -145,6 +166,9 @@ watch(
               <STag v-if="session.txt.hasPassword" type="default" size="small">
                 {{ t("listenTogether.join.locked") }}
               </STag>
+              <STag v-else type="success" size="small">
+                {{ t("listenTogether.join.open") }}
+              </STag>
               <STag :type="session.txt.level === 'vip' ? 'primary' : 'default'" size="small">
                 {{
                   session.txt.level === "vip"
@@ -171,6 +195,19 @@ watch(
           v-model="password"
           type="text"
           :placeholder="t('listenTogether.join.passwordPlaceholder')"
+        />
+      </SFormItem>
+
+      <!-- 分享码（可选，跨局域网时使用） -->
+      <SFormItem
+        :label="t('listenTogether.join.shareCodeLabel')"
+        :description="t('listenTogether.join.shareCodeHint')"
+      >
+        <SInput
+          v-model="shareCode"
+          type="text"
+          :placeholder="t('listenTogether.join.shareCodePlaceholder')"
+          class="font-mono tracking-[0.2em] uppercase"
         />
       </SFormItem>
     </div>

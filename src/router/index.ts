@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from "vue-router";
+import { runIdle } from "@/services/performanceOptimization";
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -53,14 +54,40 @@ const router = createRouter({
           component: () => import("@/pages/Radio.vue"),
         },
         {
+          path: "radio/:id",
+          name: "radio-detail",
+          component: () => import("@/pages/RadioDetail.vue"),
+        },
+        {
           path: "mv",
           name: "mv",
           component: () => import("@/pages/MvBrowse.vue"),
         },
         {
+          path: "mv/:id",
+          name: "mv-detail",
+          component: () => import("@/pages/MvDetail.vue"),
+        },
+        {
+          path: "video/:id",
+          name: "Video",
+          component: () => import("@/pages/Video.vue"),
+          props: true,
+        },
+        {
           path: "events",
           name: "events",
           component: () => import("@/pages/Events.vue"),
+        },
+        {
+          path: "event/:id",
+          name: "event-detail",
+          component: () => import("@/pages/EventDetail.vue"),
+        },
+        {
+          path: "automix",
+          name: "automix",
+          component: () => import("@/pages/Automix.vue"),
         },
         {
           path: "listen-together",
@@ -137,6 +164,32 @@ const router = createRouter({
       ],
     },
   ],
+});
+
+const PRELOAD_ROUTES = new Set([
+  "library",
+  "liked",
+  "search",
+  "daily",
+]);
+
+router.afterEach((to) => {
+  if (to.name && PRELOAD_ROUTES.has(to.name as string)) {
+    runIdle(() => {
+      const siblings = router.getRoutes().filter(
+        (r) => r.name && PRELOAD_ROUTES.has(r.name as string) && r.name !== to.name,
+      );
+      for (const route of siblings) {
+        runIdle(() => {
+          try {
+            router.resolve(route);
+          } catch {
+            // 预加载失败静默
+          }
+        });
+      }
+    });
+  }
 });
 
 export default router;

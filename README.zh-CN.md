@@ -1,8 +1,8 @@
 <div align="center">
 
-<img alt="Soto-Player Community logo" width="120" height="120" src="public/icons/favicon.png" />
+<img alt="Soto Player-Community logo" width="120" height="120" src="public/icons/favicon.png" />
 
-<h2>Soto-Player Community · 水芸音乐播放器</h2>
+<h2>Soto Player-Community · 水芸音乐播放器</h2>
 
 <p>🎵 跨平台桌面音乐播放器，基于 SPlayer-Next 二次开发，增强播放界面视觉与社区体验</p>
 
@@ -86,11 +86,17 @@ pnpm format           # Prettier
 pnpm build:native     # 仅构建 Rust 原生模块（加 `--dev` 为 debug 构建）
 ```
 
+## 社区
+
+- **QQ 群**：[1043061896](https://qm.qq.com/q/1043061896) —— 反馈、需求、闲聊
+- **GitHub Issues**：[Fantasy-XY808/Soto-Player-Community/issues](https://github.com/Fantasy-XY808/Soto-Player-Community/issues)
+
 ## 致谢
 
 本项目是 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)（作者 imsyy）的二次开发版本，在此致谢上游项目与作者。
 
 - [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) —— 本项目上游，现代化桌面音乐播放器
+- [EasyTier](https://github.com/EasyTier/EasyTier) —— 一起听 P2P 内网穿透，网络组网引擎
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) —— 类 Apple Music 歌词显示组件库
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) —— 网易云音乐 API 备份 + 增强
 

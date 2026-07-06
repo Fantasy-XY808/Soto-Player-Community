@@ -1,10 +1,11 @@
 /**
  * 在线平台搜索分发
- * 对外暴露 searchSongs / searchAlbums / searchArtists / searchPlaylists
+ * 对外暴露 searchSongs / searchAlbums / searchArtists / searchPlaylists / searchMvs
  */
 
 import type { Track } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
+import type { MvItem } from "@/apis/mv/netease";
 import type { Platform } from "@shared/types/platform";
 import * as netease from "./netease";
 import * as qqmusic from "./qqmusic";
@@ -71,4 +72,15 @@ export const searchPlaylists = (
   if (platform === "qqmusic") return qqmusic.playlists(keyword, offset, limit);
   if (platform === "kugou") return kugou.playlists(keyword, offset, limit);
   return unsupported(platform, "playlists");
+};
+
+/** 搜索 MV（仅网易云支持） */
+export const searchMvs = (
+  platform: Platform,
+  keyword: string,
+  offset: number,
+  limit: number,
+): Promise<SearchResult<MvItem>> => {
+  if (platform === "netease") return netease.mvs(keyword, offset, limit);
+  return unsupported(platform, "mvs");
 };

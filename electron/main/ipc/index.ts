@@ -10,6 +10,8 @@ import { registerLyricsIpc } from "./lyrics";
 import { registerHotkeyIpc } from "./hotkey";
 import { registerThemeIpc } from "./theme";
 import { registerStreamingIpc } from "./streaming";
+import { registerQqmusicIpc } from "./qqmusic";
+import { registerKugouIpc } from "./kugou";
 import { registerLastfmIpc } from "./lastfm";
 import { registerCacheIpc } from "./cache";
 import { registerDownloadIpc } from "./download";
@@ -19,6 +21,8 @@ import { registerUpdateIpc } from "./update";
 import { registerCloudIpc } from "./cloud";
 import { registerListenTogetherIpc } from "./listenTogether";
 import { registerMigrationIpc } from "./migration";
+import { registerUnblockIpc } from "./unblock";
+import { registerAudioAnalysisIpc } from "./audioAnalysis";
 
 /** 注册所有 IPC 处理 */
 export const registerIpcHandlers = (): void => {
@@ -35,6 +39,8 @@ export const registerIpcHandlers = (): void => {
   registerHotkeyIpc();
   registerThemeIpc();
   registerStreamingIpc();
+  registerQqmusicIpc();
+  registerKugouIpc();
   registerLastfmIpc();
   registerCacheIpc();
   registerDownloadIpc();
@@ -43,4 +49,6 @@ export const registerIpcHandlers = (): void => {
   registerUpdateIpc();
   registerListenTogetherIpc();
   registerMigrationIpc();
+  registerUnblockIpc();
+  registerAudioAnalysisIpc();
 };

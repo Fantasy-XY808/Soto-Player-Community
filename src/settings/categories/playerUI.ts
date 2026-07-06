@@ -1,4 +1,5 @@
 import type { SettingCategory } from "@/types/settings-schema";
+import { useSettingsStore } from "@/stores/settings";
 import IconLucideMonitorPlay from "~icons/lucide/monitor-play";
 
 const playerUICategory: SettingCategory = {
@@ -23,6 +24,97 @@ const playerUICategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "player.enableFluidBackground" },
           defaultValue: true,
+          childrenCondition: () => useSettingsStore().player.enableFluidBackground,
+          children: [
+            {
+              key: "playerBgPreset",
+              type: "select",
+              binding: { store: "settings", path: "player.playerBgPreset" },
+              options: [
+                { value: "soft", labelKey: "settings.playerBgPreset.soft" },
+                { value: "vivid", labelKey: "settings.playerBgPreset.vivid" },
+                { value: "intense", labelKey: "settings.playerBgPreset.intense" },
+                { value: "custom", labelKey: "settings.playerBgPreset.custom" },
+              ],
+              defaultValue: "vivid",
+              hideChildren: true,
+              childrenCondition: () => useSettingsStore().player.playerBgPreset === "custom",
+              children: [
+                {
+                  key: "playerBgFlowSpeed",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgFlowSpeed" },
+                  min: 0.5,
+                  max: 8,
+                  step: 0.5,
+                  defaultValue: 2,
+                  marks: { 0.5: "0.5", 2: "2", 4: "4", 6: "6", 8: "8" },
+                },
+                {
+                  key: "playerBgRenderScale",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgRenderScale" },
+                  min: 0.25,
+                  max: 1,
+                  step: 0.05,
+                  defaultValue: 0.5,
+                  marks: { 0.25: "0.25", 0.5: "0.5", 0.75: "0.75", 1: "1" },
+                },
+                {
+                  key: "playerBgFps",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgFps" },
+                  min: 15,
+                  max: 60,
+                  step: 5,
+                  defaultValue: 30,
+                  marks: { 15: "15", 30: "30", 45: "45", 60: "60" },
+                },
+                {
+                  key: "playerBgBeat",
+                  type: "switch",
+                  binding: { store: "settings", path: "player.playerBgBeat" },
+                  defaultValue: true,
+                },
+                {
+                  key: "playerBgBrightness",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgBrightness" },
+                  min: 0.5,
+                  max: 2.5,
+                  step: 0.1,
+                  defaultValue: 1.2,
+                  marks: { 0.5: "0.5", 1: "1", 1.5: "1.5", 2: "2", 2.5: "2.5" },
+                },
+                {
+                  key: "playerBgSaturation",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgSaturation" },
+                  min: 0.5,
+                  max: 2,
+                  step: 0.1,
+                  defaultValue: 1.1,
+                  marks: { 0.5: "0.5", 1: "1", 1.5: "1.5", 2: "2" },
+                },
+                {
+                  key: "playerBgContrast",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.playerBgContrast" },
+                  min: 0.5,
+                  max: 2,
+                  step: 0.1,
+                  defaultValue: 1.0,
+                  marks: { 0.5: "0.5", 1: "1", 1.5: "1.5", 2: "2" },
+                },
+                {
+                  key: "playerBgFreezeOnPause",
+                  type: "switch",
+                  binding: { store: "settings", path: "player.playerBgFreezeOnPause" },
+                  defaultValue: false,
+                },
+              ],
+            },
+          ],
         },
         {
           key: "enableSnowBackground",
@@ -43,6 +135,12 @@ const playerUICategory: SettingCategory = {
           defaultValue: false,
         },
         {
+          key: "enableEffectAutoDowngrade",
+          type: "switch",
+          binding: { store: "settings", path: "player.enableEffectAutoDowngrade" },
+          defaultValue: true,
+        },
+        {
           key: "coverLayout",
           type: "select",
           binding: { store: "settings", path: "player.coverLayout" },
@@ -51,6 +149,44 @@ const playerUICategory: SettingCategory = {
             { value: "fullscreen", labelKey: "settings.coverLayout.fullscreen" },
           ],
           defaultValue: "default",
+          childrenCondition: () => useSettingsStore().player.coverLayout === "fullscreen",
+          children: [
+            {
+              key: "coverParallax",
+              type: "switch",
+              binding: { store: "settings", path: "appearance.coverParallax" },
+              defaultValue: true,
+              childrenCondition: () => useSettingsStore().appearance.coverParallax,
+              children: [
+                {
+                  key: "coverParallaxIntensity",
+                  type: "slider",
+                  binding: { store: "settings", path: "appearance.coverParallaxIntensity" },
+                  min: 0,
+                  max: 100,
+                  step: 1,
+                  defaultValue: 60,
+                  marks: { 0: "0", 30: "30", 60: "60", 100: "100" },
+                },
+                {
+                  key: "coverParallaxMode",
+                  type: "select",
+                  binding: { store: "settings", path: "appearance.coverParallaxMode" },
+                  options: [
+                    { value: "plane", labelKey: "settings.coverParallaxMode.plane" },
+                    { value: "multi", labelKey: "settings.coverParallaxMode.multi" },
+                  ],
+                  defaultValue: "plane",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: "mirrorLayout",
+          type: "switch",
+          binding: { store: "settings", path: "player.mirrorLayout" },
+          defaultValue: false,
         },
         {
           key: "autoCenterCover",
@@ -91,6 +227,58 @@ const playerUICategory: SettingCategory = {
       ],
     },
     {
+      id: "controlEnhance",
+      tag: { text: "Beta" },
+      items: [
+        {
+          key: "controlEnhanceMode",
+          type: "select",
+          binding: { store: "settings", path: "player.controlEnhanceMode" },
+          options: [
+            { value: "none", labelKey: "settings.controlEnhanceMode.none" },
+            { value: "background", labelKey: "settings.controlEnhanceMode.background" },
+            { value: "outline", labelKey: "settings.controlEnhanceMode.outline" },
+            { value: "auto", labelKey: "settings.controlEnhanceMode.auto" },
+          ],
+          defaultValue: "none",
+          childrenCondition: () => useSettingsStore().player.controlEnhanceMode !== "none",
+          hideChildren: true,
+          children: [
+            {
+              key: "controlBackgroundStyle",
+              type: "select",
+              binding: { store: "settings", path: "player.controlBackgroundStyle" },
+              options: [
+                { value: "blur", labelKey: "settings.controlBackgroundStyle.blur" },
+                { value: "acrylic", labelKey: "settings.controlBackgroundStyle.acrylic" },
+                { value: "mica", labelKey: "settings.controlBackgroundStyle.mica" },
+              ],
+              defaultValue: "blur",
+              visible: () => {
+                const mode = useSettingsStore().player.controlEnhanceMode;
+                return mode === "background" || mode === "auto";
+              },
+            },
+            {
+              key: "controlOutlineStyle",
+              type: "select",
+              binding: { store: "settings", path: "player.controlOutlineStyle" },
+              options: [
+                { value: "thin", labelKey: "settings.controlOutlineStyle.thin" },
+                { value: "shadow", labelKey: "settings.controlOutlineStyle.shadow" },
+                { value: "glow", labelKey: "settings.controlOutlineStyle.glow" },
+              ],
+              defaultValue: "thin",
+              visible: () => {
+                const mode = useSettingsStore().player.controlEnhanceMode;
+                return mode === "outline" || mode === "auto";
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
       id: "musicSpectrum",
       tag: { text: "Beta" },
       items: [
@@ -98,7 +286,7 @@ const playerUICategory: SettingCategory = {
           key: "enableSpectrum",
           type: "switch",
           binding: { store: "settings", path: "player.enableSpectrum" },
-          defaultValue: false,
+          defaultValue: true,
           children: [
             {
               key: "spectrumBarWidth",
@@ -150,6 +338,68 @@ const playerUICategory: SettingCategory = {
                 { value: "around", labelKey: "settings.spectrumStyle.around" },
               ],
               defaultValue: "bar",
+            },
+            {
+              key: "spectrumBreathing",
+              type: "switch",
+              binding: { store: "settings", path: "player.spectrumBreathing" },
+              defaultValue: false,
+              childrenCondition: () => useSettingsStore().player.spectrumBreathing,
+              children: [
+                {
+                  key: "spectrumBreathingIntensity",
+                  type: "slider",
+                  binding: { store: "settings", path: "player.spectrumBreathingIntensity" },
+                  min: 0,
+                  max: 100,
+                  step: 1,
+                  defaultValue: 80,
+                  marks: { 0: "0", 30: "30", 60: "60", 80: "80", 100: "100" },
+                },
+              ],
+            },
+            {
+              key: "spectrumBrightness",
+              type: "slider",
+              binding: { store: "settings", path: "player.spectrumBrightness" },
+              min: 0.3,
+              max: 1,
+              step: 0.05,
+              defaultValue: 1,
+              marks: { 0.3: "0.3", 0.5: "0.5", 0.8: "0.8", 1: "1" },
+            },
+            {
+              key: "spectrumSmartDim",
+              type: "switch",
+              binding: { store: "settings", path: "player.spectrumSmartDim" },
+              defaultValue: false,
+            },
+            {
+              key: "fftEqualLoudness",
+              type: "switch",
+              binding: { store: "settings", path: "player.fftEqualLoudness" },
+              defaultValue: true,
+            },
+            {
+              key: "spectrumColorMode",
+              type: "select",
+              binding: { store: "settings", path: "player.spectrumColorMode" },
+              options: [
+                { value: "cover", labelKey: "settings.spectrumColorMode.cover" },
+                { value: "custom", labelKey: "settings.spectrumColorMode.custom" },
+              ],
+              defaultValue: "cover",
+              childrenCondition: () => useSettingsStore().player.spectrumColorMode === "custom",
+              children: [
+                {
+                  key: "spectrumCustomColor",
+                  type: "color",
+                  binding: { store: "settings", path: "player.spectrumCustomColor" },
+                  defaultValue: "#FFFFFF",
+                  showAlpha: false,
+                  colorFormat: "hex",
+                },
+              ],
             },
           ],
         },

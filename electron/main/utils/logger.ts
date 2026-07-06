@@ -95,3 +95,5 @@ export const cloudLog = log.scope("cloud");
 export const ltLog = log.scope("listen-together");
 export const qqmusicLog = log.scope("qqmusic");
 export const kugouLog = log.scope("kugou");
+export const unblockLog = log.scope("unblock");
+export const analysisLog = log.scope("analysis");

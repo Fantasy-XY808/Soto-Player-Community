@@ -8,7 +8,8 @@ export type SettingWidgetType =
   | "color"
   | "button"
   | "custom"
-  | "number";
+  | "number"
+  | "text";
 
 /** 选择项 */
 export interface SettingOption {
@@ -55,6 +56,8 @@ export interface SettingItem {
   unit?: string;
   /** number / 文本输入框的 placeholder */
   placeholderKey?: string;
+  /** text 控件的原生 input type；默认 text，密码字段使用 password */
+  inputType?: "text" | "password" | "url" | "email" | "search" | "tel";
   /** color 控件是否启用透明度（默认 true） */
   showAlpha?: boolean;
   /** color 控件输出格式（默认 rgb） */

@@ -1,8 +1,17 @@
 <script setup lang="ts">
 /**
- * 灵动岛展开视图
- * 参照 WinIsland 的 music_view.rs：封面+信息同行、歌词右侧、进度条、控制按钮
- * 纯音乐时歌词区改为频谱（歌词区即频谱区），非纯音乐不显示频谱
+ * 灵动岛展开视图（绝对坐标布局，深度对齐 WinIsland music_view.rs）
+ *
+ * 布局（基于 600×200 内容区，scale 由 config.scale 缩放）：
+ * - 封面：72×72，左上角 (36, 24)
+ * - 标题/艺术家：x=124（封面右 16px），title_y=50，artist_y=72
+ * - 进度条：y=114，左 68 / 右 532（time_w=36 + 4 间距）
+ * - 时间标签：左 x=36 / 右 x=564，baseline=117.5
+ * - 控制按钮：cx=300，cy=158.75，间距 75
+ * - 频谱（纯音乐）：x=555，y=46
+ *
+ * 与 flex 布局相比，绝对坐标不会因窗口高度不足而挤压控件，
+ * 只会像 WinIsland 一样被 clip 裁剪，保证控件本身完整。
  */
 import type { Track } from "@shared/types/player";
 import type { DynamicIslandSettings } from "@shared/types/settings";
@@ -17,15 +26,15 @@ interface Props {
   position: number;
   duration: number;
   config: DynamicIslandSettings;
-  /** 当前行歌词（用于展开视图信息右侧显示） */
   currentLine?: LyricLine | null;
-  /** 是否为纯音乐：true 时歌词区改为频谱 */
   isInstrumental?: boolean;
+  impulse?: (which: "view" | "hide", velocity: number) => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   currentLine: null,
   isInstrumental: false,
+  impulse: undefined,
 });
 
 const emit = defineEmits<{
@@ -36,20 +45,39 @@ const emit = defineEmits<{
   (e: "interact"): void;
 }>();
 
-const coverSize = computed(() => Math.round(56 * props.config.scale));
-const PROGRESS_HEIGHT = 5;
-const PROGRESS_HOVER_HEIGHT = 8;
-/* 纯音乐模式频谱尺寸：展开视图有充足宽度，使用更大频谱 */
+/* 布局常量（对齐 WinIsland music_view.rs，按 600×200 内容区） */
+const COVER_SIZE = 72;
+const COVER_RADIUS = 14;
+const PAD_X = 36;
+const COVER_X = PAD_X;
+const COVER_Y = 24;
+const TEXT_X = COVER_X + COVER_SIZE + 16;
+const TITLE_Y = COVER_Y + 26;
+const ARTIST_Y = TITLE_Y + 22;
+const BAR_Y = COVER_Y + COVER_SIZE + 18;
+const BAR_LEFT = PAD_X + 32;
+const BAR_RIGHT_OFFSET = PAD_X + 32;
+const BTN_CY = BAR_Y + 42;
+const PROGRESS_H = 5.5;
+const PROGRESS_H_HOVER = 9;
+const PROGRESS_HIT_H = 16;
+const VIZ_X_OFFSET = 45;
+const VIZ_Y = TITLE_Y - 4;
 const INSTRUMENTAL_SPECTRUM_HEIGHT = 50;
-/* 频谱宽度上下限，防止极端值 */
-const SPECTRUM_MIN_WIDTH = 120;
-const SPECTRUM_MAX_WIDTH = 420;
-/* info-area 与频谱之间的 CSS gap（px），需与 .info-lyric-row 的 gap 一致 */
-const INFO_SPECTRUM_GAP = 12;
+const INSTRUMENTAL_SPECTRUM_WIDTH = 120;
+const IMPULSE_PAUSE = 0.3;
+const IMPULSE_SKIP = 0.6;
 
 const progressHovered = ref(false);
 const isDragging = ref(false);
 const progressRef = ref<HTMLElement | null>(null);
+const hoverT = ref(0);
+let hoverRaf = 0;
+const pauseT = ref(0);
+let pauseRaf = 0;
+
+const containerEl = ref<HTMLElement | null>(null);
+const containerWidth = ref(600);
 
 const formatTime = (ms: number): string => {
   const sec = Math.max(0, Math.floor(ms / 1000));
@@ -87,92 +115,104 @@ const onProgressMouseUp = (): void => {
 };
 
 const handlePrev = (): void => {
+  props.impulse?.("view", -IMPULSE_SKIP);
   emit("prev");
   emit("interact");
 };
 const handleNext = (): void => {
+  props.impulse?.("view", IMPULSE_SKIP);
   emit("next");
   emit("interact");
 };
 const handleTogglePlay = (): void => {
+  props.impulse?.("view", IMPULSE_PAUSE);
   emit("toggle-play");
   emit("interact");
 };
 
 const artistsText = computed(() => props.track?.artists?.map((a) => a.name).join(" / ") ?? "");
 
-/** 当前行文本（取 words 拼接，无歌词时显示歌曲名） */
-const currentLyricText = computed(() => {
-  const line = props.currentLine;
-  if (!line || !line.words || line.words.length === 0) {
-    return props.track?.title ?? "";
-  }
-  return line.words.map((w) => w.word).join("");
-});
-
-/** 歌词文本 ref，用于检测是否超出 2 行 */
-const lyricTextRef = ref<HTMLElement | null>(null);
-/** 歌词是否超出 2 行需要滚动 */
-const isLyricScrollable = ref(false);
-
-/** info-lyric-row 容器 ref，用于测算可用频谱宽度 */
-const infoLyricRowRef = ref<HTMLElement | null>(null);
-/** info-area ref，用于测算实际信息区宽度 */
-const infoAreaRef = ref<HTMLElement | null>(null);
-/** 频谱动态宽度（px）；由 ResizeObserver 实时测算，避免间隔过窄遮挡或过宽空旷 */
-const spectrumWidth = ref(SPECTRUM_MIN_WIDTH);
-
-/** 根据容器与信息区实际宽度，反推频谱宽度填满剩余空间 */
-const updateSpectrumWidth = (): void => {
-  const row = infoLyricRowRef.value;
-  const info = infoAreaRef.value;
-  if (!row || !info) return;
-  const rowWidth = row.clientWidth;
-  const infoWidth = info.offsetWidth;
-  const available = rowWidth - infoWidth - INFO_SPECTRUM_GAP;
-  const clamped = Math.max(SPECTRUM_MIN_WIDTH, Math.min(available, SPECTRUM_MAX_WIDTH));
-  spectrumWidth.value = Math.round(clamped);
-};
-
-/** 频谱区尺寸观察器；仅在尺寸变化时触发，低开销 */
-let spectrumResizeObserver: ResizeObserver | null = null;
-
-/** 检测歌词是否超出容器高度（2 行） */
-const checkLyricScroll = (): void => {
-  const el = lyricTextRef.value;
-  if (!el) {
-    isLyricScrollable.value = false;
+/* hover 平滑：lerp 0.18 */
+const tickHover = (): void => {
+  const target = progressHovered.value || isDragging.value ? 1 : 0;
+  hoverT.value += (target - hoverT.value) * 0.18;
+  if (Math.abs(target - hoverT.value) < 0.001) {
+    hoverT.value = target;
+    hoverRaf = 0;
     return;
   }
-  // scrollHeight > clientHeight 表示内容超出可见区域
-  isLyricScrollable.value = el.scrollHeight > el.clientHeight + 1;
+  hoverRaf = requestAnimationFrame(tickHover);
 };
 
-watch(currentLyricText, () => {
-  // 文本变化后下一帧检测，确保 DOM 已更新
-  requestAnimationFrame(checkLyricScroll);
-});
-
-// 切歌时信息区宽度可能变化（标题/歌手长度不同），下一帧重测频谱宽度
 watch(
-  () => [props.track?.title, props.track?.artists] as const,
+  () => progressHovered.value || isDragging.value,
   () => {
-    requestAnimationFrame(updateSpectrumWidth);
+    if (hoverRaf === 0) hoverRaf = requestAnimationFrame(tickHover);
   },
 );
+
+/* 暂停态平滑：lerp 0.10 */
+const tickPause = (): void => {
+  const target = props.playing ? 1 : 0;
+  pauseT.value += (target - pauseT.value) * 0.1;
+  if (Math.abs(target - pauseT.value) < 0.001) {
+    pauseT.value = target;
+    pauseRaf = 0;
+    return;
+  }
+  pauseRaf = requestAnimationFrame(tickPause);
+};
+
+watch(
+  () => props.playing,
+  () => {
+    if (pauseRaf === 0) pauseRaf = requestAnimationFrame(tickPause);
+  },
+);
+
+const progressBarHeight = computed(() => {
+  const h = PROGRESS_H + (PROGRESS_H_HOVER - PROGRESS_H) * hoverT.value;
+  return h.toFixed(2);
+});
+
+const timeAlpha = computed(() => 0.5 + 0.5 * hoverT.value);
+const coverFilter = computed(() => `brightness(${(0.75 + 0.25 * pauseT.value).toFixed(3)})`);
+const coverTransform = computed(() => `scale(${(0.85 + 0.15 * pauseT.value).toFixed(3)})`);
+
+/* 容器尺寸观测：用于动态计算进度条与按钮的绝对位置 */
+let resizeObserver: ResizeObserver | null = null;
+
+const updateSize = (): void => {
+  if (!containerEl.value) return;
+  const rect = containerEl.value.getBoundingClientRect();
+  containerWidth.value = rect.width;
+};
+
+/* 派生坐标（基于实际容器宽度，避免硬编码 600px 导致不同窗口宽度下控件错位） */
+const barLeft = computed(() => BAR_LEFT);
+const barRight = computed(() => containerWidth.value - BAR_RIGHT_OFFSET);
+const barWidth = computed(() => Math.max(0, barRight.value - barLeft.value));
+const btnCx = computed(() => Math.round(containerWidth.value / 2));
+const vizX = computed(() => containerWidth.value - VIZ_X_OFFSET);
 
 onMounted(() => {
   window.addEventListener("mouseup", onProgressMouseUp);
   window.addEventListener("mousemove", onProgressMouseMove);
-  requestAnimationFrame(checkLyricScroll);
-  // ResizeObserver 仅在尺寸变化时触发，远比 RAF 轮询低开销
-  spectrumResizeObserver = new ResizeObserver(updateSpectrumWidth);
-  if (infoLyricRowRef.value) spectrumResizeObserver.observe(infoLyricRowRef.value);
-  if (infoAreaRef.value) spectrumResizeObserver.observe(infoAreaRef.value);
-  updateSpectrumWidth();
+  pauseT.value = props.playing ? 1 : 0;
+  resizeObserver = new ResizeObserver(updateSize);
+  if (containerEl.value) resizeObserver.observe(containerEl.value);
+  updateSize();
 });
 
-/* 频谱调色板（参照 WinIsland：从封面提取 primary/secondary/primary 渐变） */
+onBeforeUnmount(() => {
+  window.removeEventListener("mouseup", onProgressMouseUp);
+  window.removeEventListener("mousemove", onProgressMouseMove);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  if (hoverRaf !== 0) cancelAnimationFrame(hoverRaf);
+  if (pauseRaf !== 0) cancelAnimationFrame(pauseRaf);
+});
+
 const palette = ref<string[]>([
   "rgba(255, 255, 255, 0.9)",
   "rgba(255, 255, 255, 0.5)",
@@ -186,97 +226,123 @@ watch(
   },
   { immediate: true },
 );
-
-onBeforeUnmount(() => {
-  window.removeEventListener("mouseup", onProgressMouseUp);
-  window.removeEventListener("mousemove", onProgressMouseMove);
-  spectrumResizeObserver?.disconnect();
-  spectrumResizeObserver = null;
-});
 </script>
 
 <template>
-  <div class="expanded">
-    <!-- 封面 + 信息 + 歌词/频谱（同一行） -->
-    <div class="top-row">
-      <div class="cover-frame" :style="{ width: `${coverSize}px`, height: `${coverSize}px` }">
-        <img
-          :src="track?.cover || DEFAULT_COVER"
-          alt="cover"
-          draggable="false"
-          decoding="async"
-          @error="($event.target as HTMLImageElement).src = DEFAULT_COVER"
-        />
+  <div ref="containerEl" class="expanded">
+    <!-- 封面 -->
+    <div
+      class="cover-frame"
+      :style="{
+        left: `${COVER_X}px`,
+        top: `${COVER_Y}px`,
+        width: `${COVER_SIZE}px`,
+        height: `${COVER_SIZE}px`,
+        borderRadius: `${COVER_RADIUS}px`,
+      }"
+    >
+      <img
+        :src="track?.cover || DEFAULT_COVER"
+        alt="cover"
+        draggable="false"
+        decoding="async"
+        class="cover-img"
+        :style="{ filter: coverFilter, transform: coverTransform }"
+        @error="($event.target as HTMLImageElement).src = DEFAULT_COVER"
+      />
+    </div>
+
+    <!-- 标题 + 艺术家 -->
+    <div class="info-area" :style="{ left: `${TEXT_X}px`, top: `${COVER_Y}px` }">
+      <div class="song-title" :style="{ top: `${TITLE_Y - COVER_Y}px` }">
+        {{ track?.title ?? "未知曲目" }}
       </div>
-      <div ref="infoLyricRowRef" class="info-lyric-row">
-        <div ref="infoAreaRef" class="info-area">
-          <div class="song-title">{{ track?.title ?? "未知曲目" }}</div>
-          <div class="song-artist">{{ artistsText || "未知艺术家" }}</div>
-        </div>
-        <!-- 纯音乐：歌词区改为大频谱；宽度由 ResizeObserver 实时测算填满剩余空间 -->
-        <IslandSpectrum
-          v-if="isInstrumental && config.showSpectrum"
-          :width="spectrumWidth"
-          :height="INSTRUMENTAL_SPECTRUM_HEIGHT"
-          :max-height="INSTRUMENTAL_SPECTRUM_HEIGHT"
-          :bar-width="4"
-          :bar-gap="3"
-          :num-bands="40"
-          :palette="palette"
-          :playing="playing"
-          :spectrum-style="config.spectrumStyle"
-          class="lyric-spectrum"
-        />
-        <!-- 非纯音乐：显示歌词（2 行，超出滚动） -->
-        <div
-          v-else
-          ref="lyricTextRef"
-          class="lyric-text"
-          :class="{ scrollable: isLyricScrollable }"
-        >
-          <span class="lyric-text-inner">{{ currentLyricText }}</span>
-        </div>
+      <div class="song-artist" :style="{ top: `${ARTIST_Y - COVER_Y}px` }">
+        {{ artistsText || "未知艺术家" }}
       </div>
     </div>
 
-    <!-- 进度条 -->
+    <!-- 频谱（纯音乐模式） -->
+    <IslandSpectrum
+      v-if="isInstrumental && config.showSpectrum"
+      :width="INSTRUMENTAL_SPECTRUM_WIDTH"
+      :height="INSTRUMENTAL_SPECTRUM_HEIGHT"
+      :max-height="INSTRUMENTAL_SPECTRUM_HEIGHT"
+      :bar-width="4"
+      :bar-gap="3"
+      :num-bands="40"
+      :palette="palette"
+      :playing="playing"
+      :spectrum-style="config.spectrumStyle"
+      class="lyric-spectrum"
+      :style="{ left: `${vizX - INSTRUMENTAL_SPECTRUM_WIDTH}px`, top: `${VIZ_Y}px` }"
+    />
+
+    <!-- 进度条命中区 -->
     <div
       ref="progressRef"
       class="progress-track"
       :style="{
-        height: `${progressHovered || isDragging ? PROGRESS_HOVER_HEIGHT : PROGRESS_HEIGHT}px`,
+        left: `${barLeft}px`,
+        top: `${BAR_Y - PROGRESS_HIT_H / 2}px`,
+        width: `${barWidth}px`,
+        height: `${PROGRESS_HIT_H}px`,
       }"
       @mousedown="onProgressMouseDown"
       @mouseenter="progressHovered = true"
       @mouseleave="progressHovered = false"
     >
-      <div class="progress-fill" :style="{ width: `${progressPercent * 100}%` }" />
+      <div
+        class="progress-bar"
+        :style="{
+          height: `${progressBarHeight}px`,
+        }"
+      >
+        <div
+          class="progress-fill"
+          :style="{
+            width: `${Math.max(parseFloat(progressBarHeight), progressPercent * 100)}%`,
+          }"
+        />
+      </div>
     </div>
 
-    <!-- 控制栏：时间 + 按钮 + 剩余时间 -->
-    <div class="controls-area">
-      <span class="time">{{ formatTime(position) }}</span>
-      <div class="controls">
-        <button class="ctrl-btn" type="button" @click="handlePrev">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-          </svg>
-        </button>
-        <button class="ctrl-btn ctrl-play" type="button" @click="handleTogglePlay">
-          <svg v-if="playing" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-          </svg>
-          <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </button>
-        <button class="ctrl-btn" type="button" @click="handleNext">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-          </svg>
-        </button>
-      </div>
-      <span class="time remaining">-{{ formatTime(duration - position) }}</span>
+    <!-- 左时间标签 -->
+    <span
+      class="time time-left"
+      :style="{ left: `${PAD_X}px`, top: `${BAR_Y - 5}px`, opacity: timeAlpha }"
+    >
+      {{ formatTime(position) }}
+    </span>
+
+    <!-- 右时间标签 -->
+    <span
+      class="time time-right"
+      :style="{ right: `${PAD_X}px`, top: `${BAR_Y - 5}px`, opacity: timeAlpha }"
+    >
+      -{{ formatTime(duration - position) }}
+    </span>
+
+    <!-- 控制按钮 -->
+    <div class="controls" :style="{ left: `${btnCx}px`, top: `${BTN_CY}px` }">
+      <button class="ctrl-btn ctrl-prev" type="button" @click="handlePrev">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+        </svg>
+      </button>
+      <button class="ctrl-btn ctrl-play" type="button" @click="handleTogglePlay">
+        <svg v-if="playing" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+        </svg>
+        <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </button>
+      <button class="ctrl-btn ctrl-next" type="button" @click="handleNext">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>
@@ -286,164 +352,126 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  padding: 14px 16px;
-  box-sizing: border-box;
-  color: var(--di-played);
-  gap: 10px;
+  color: #fff;
   pointer-events: none;
+  /* 不裁剪：让控件在窗口尺寸不足时仍按固定坐标渲染，由父级 content-layer 统一裁剪 */
+  overflow: visible;
 }
-.top-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-height: 0;
-}
+/* 所有子元素绝对定位，不依赖 flex 拉伸 */
 .cover-frame {
-  border-radius: 10px;
+  position: absolute;
   overflow: hidden;
-  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.08);
+  will-change: filter, transform;
 }
-.cover-frame img {
+.cover-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-}
-.info-lyric-row {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  transition:
+    filter 0.05s linear,
+    transform 0.05s linear;
+  will-change: filter, transform;
 }
 .info-area {
-  flex-shrink: 0;
-  max-width: 45%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  position: absolute;
+  width: 240px;
+  height: 72px;
+  overflow: hidden;
+}
+.song-title,
+.song-artist {
+  position: absolute;
+  left: 0;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 240px;
+  line-height: 1.2;
 }
 .song-title {
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 700;
+  color: #fff;
 }
 .song-artist {
-  font-size: 11px;
+  font-weight: 400;
+  color: #fff;
   opacity: 0.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.lyric-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-  opacity: 0.85;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  padding-left: 12px;
-  /* 默认 2 行显示，超出省略 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-}
-.lyric-text.scrollable {
-  /* 超过 2 行时改为可滚动，取消 line-clamp */
-  -webkit-line-clamp: unset;
-  display: block;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-.lyric-text.scrollable::-webkit-scrollbar {
-  width: 3px;
-}
-.lyric-text.scrollable::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-}
-.lyric-text-inner {
-  display: block;
 }
 .lyric-spectrum {
-  flex-shrink: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  padding-left: 12px;
+  position: absolute;
 }
+/* 进度条命中区 */
 .progress-track {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  position: absolute;
   cursor: pointer;
-  transition: height 0.15s ease;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
   pointer-events: auto;
+}
+.progress-bar {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: var(--bar-h, 5.5px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
 }
 .progress-fill {
   height: 100%;
-  background: var(--di-played);
-  border-radius: 4px;
-  transition: width 0.1s linear;
+  background: #fff;
+  border-radius: inherit;
+  transition: width 0.05s linear;
 }
-.controls-area {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  pointer-events: auto;
+.time {
+  position: absolute;
+  font-size: 10px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  pointer-events: none;
+  line-height: 1;
+  user-select: none;
 }
+.time-left {
+  text-align: left;
+}
+.time-right {
+  text-align: right;
+}
+/* 控制按钮：绝对定位中心点，按钮自身用 transform 居中 */
 .controls {
+  position: absolute;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 75px;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
 }
 .ctrl-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border: none;
-  border-radius: 50%;
   background: transparent;
-  color: var(--di-played);
+  color: #fff;
   cursor: pointer;
   pointer-events: auto;
-  transition:
-    background 0.2s,
-    transform 0.15s;
+  transition: opacity 0.15s;
+  padding: 0;
 }
 .ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  opacity: 0.7;
 }
 .ctrl-btn:active {
-  transform: scale(0.9);
+  transform: scale(0.92);
 }
 .ctrl-play {
-  width: 38px;
-  height: 38px;
-  background: rgba(255, 255, 255, 0.15);
-}
-.ctrl-play:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-.time {
-  font-size: 11px;
-  opacity: 0.6;
-  font-variant-numeric: tabular-nums;
-  min-width: 32px;
-}
-.time.remaining {
-  text-align: right;
+  width: 40px;
+  height: 40px;
 }
 </style>

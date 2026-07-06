@@ -10,7 +10,13 @@ import * as nowPlaying from "@main/services/nowPlaying";
 import * as lastfm from "@main/services/lastfm";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import { fetchBytes } from "@main/utils/fetchBytes";
-import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
+import {
+  getPlayer,
+  resetPlayer,
+  onPlayerCreated,
+  setSpatialAudio,
+  setFftEqualLoudness,
+} from "@main/services/engine";
 import { startDevicePolling, stopDevicePolling } from "@main/services/device";
 import { getThumbar } from "@main/services/thumbar";
 import {
@@ -26,9 +32,18 @@ import { appName, getSongCacheDir } from "@main/utils/config";
 import * as songCache from "@main/services/songCache";
 import { parseArtists, parseAlbum, formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
+import { syncPreventSleep } from "@main/services/preventSleep";
 import { handlePlayerEvent } from "@main/listenTogether";
 import { ErrorCode } from "@shared/types/errors";
 import type { LoadOptions, RepeatMode, ShuffleMode, PlayerState } from "@shared/types/player";
+import type {
+  BassEnhancerSettings,
+  LoudnessNormalizerSettings,
+  NeuralUpsampleSettings,
+  SpatialAudioSettings,
+  StereoWidenerSettings,
+  SuperResParams,
+} from "@shared/types/settings";
 import type { MediaEvent } from "@main/services/media";
 import { JsPlayerEvent } from "@splayer/audio-engine";
 
@@ -76,6 +91,8 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         nowPlaying.onPlayStateChange(state);
         lastfm.onState(state === "playing");
         neteaseScrobble.onState(state === "playing");
+        // 防休眠：仅在「播放中 + 设置开启」时阻塞
+        syncPreventSleep(state === "playing", store.get("system.preventSleep"));
         const statusEvent = {
           type: "status",
           data: {
@@ -101,6 +118,10 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         lastfm.onEnded();
         neteaseScrobble.onEnded();
         setTaskbarProgress(-1);
+        // 一起听：主机端播放结束时通知客户端停止，避免客户端继续等待
+        // 此前 ended 不调用 handlePlayerEvent，客户端收不到任何信号，
+        // 仍在播放上一首的本地缓存，造成音画不同步
+        handlePlayerEvent("stateChange", { state: "paused" });
         break;
       }
       case "sourceError": {
@@ -291,10 +312,12 @@ export const registerPlayerIpc = (): void => {
         },
       };
       // 一起听：主机端曲目切换时广播给客户端（authoritative 为渲染层下发的权威 Track）
+      // position 用真实当前位置（load 后 inst 已切到新源，getPosition 返回 0 或 seek 起始值），
+      // 而非硬编码 0——避免客户端在远端起始位置非 0 时（如续播场景）从 0 开始播放。
       if (authoritative) {
         handlePlayerEvent("trackChange", {
           track: authoritative,
-          position: 0,
+          position: toMs(getPlayer().getPosition()),
           state: autoPlay ? "playing" : "paused",
         });
       }
@@ -414,6 +437,17 @@ export const registerPlayerIpc = (): void => {
         isFinished: raw.isFinished,
       },
     };
+  });
+
+  // 取实际进入 DSP 链的采样率（Hz）
+  // 高采样率设备 + 高采样率源时保留母带细节（受 MAX_DSP_SAMPLE_RATE 上限约束）
+  // UI 据此显示真实工作采样率而非 48k 占位
+  ipcMain.handle("player:getEffectiveSampleRate", () => {
+    try {
+      return { success: true, data: getPlayer().getEffectiveSampleRate() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
   });
 
   // 重建音频输出设备
@@ -586,10 +620,33 @@ export const registerPlayerIpc = (): void => {
 
   // 配置音频超分（高频激励器）
   // backend: 0=CPU, 1=GPU, 2=NPU（GPU/NPU 当前回退到 CPU）
-  ipcMain.handle("player:setAudioSuperResolution", (_event, enabled: boolean, backend: number) => {
+  // params: SuperResParams（高通/激励/混合等可调项）
+  ipcMain.handle(
+    "player:setAudioSuperResolution",
+    (_event, enabled: boolean, backend: number, params: SuperResParams) => {
+      try {
+        getPlayer().setAudioSuperResolution(enabled, backend, params);
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 仅更新超分参数（不改变 enabled / backend）
+  ipcMain.handle("player:setAudioSuperResolutionParams", (_event, params: SuperResParams) => {
     try {
-      getPlayer().setAudioSuperResolution(enabled, backend);
+      getPlayer().setAudioSuperResolutionParams(params);
       return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取音频超分当前参数
+  ipcMain.handle("player:getAudioSuperResolutionParams", () => {
+    try {
+      return { success: true, data: getPlayer().getAudioSuperResolutionParams() };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
     }
@@ -599,6 +656,256 @@ export const registerPlayerIpc = (): void => {
   ipcMain.handle("player:getAudioSuperResolutionEffectiveBackend", () => {
     try {
       return { success: true, data: getPlayer().getAudioSuperResolutionEffectiveBackend() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 配置低音增强
+  ipcMain.handle(
+    "player:setBassEnhancer",
+    (_event, enabled: boolean, params: BassEnhancerSettings) => {
+      try {
+        getPlayer().setBassEnhancer(enabled, {
+          freq: params.freq,
+          gainDb: params.gainDb,
+          q: params.q,
+          harmonicsMix: params.harmonicsMix,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 仅更新低音增强参数
+  ipcMain.handle("player:setBassEnhancerParams", (_event, params: BassEnhancerSettings) => {
+    try {
+      getPlayer().setBassEnhancerParams({
+        freq: params.freq,
+        gainDb: params.gainDb,
+        q: params.q,
+        harmonicsMix: params.harmonicsMix,
+        bypass: params.bypass,
+      });
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取低音增强当前参数
+  ipcMain.handle("player:getBassEnhancerParams", () => {
+    try {
+      return { success: true, data: getPlayer().getBassEnhancerParams() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取低音增强开关状态
+  ipcMain.handle("player:getBassEnhancerEnabled", () => {
+    try {
+      return { success: true, data: getPlayer().getBassEnhancerEnabled() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 配置立体声展宽
+  ipcMain.handle(
+    "player:setStereoWidener",
+    (_event, enabled: boolean, params: StereoWidenerSettings) => {
+      try {
+        getPlayer().setStereoWidener(enabled, {
+          width: params.width,
+          crossFeed: params.crossFeed,
+          haasEnabled: params.haasEnabled,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 仅更新立体声展宽参数
+  ipcMain.handle("player:setStereoWidenerParams", (_event, params: StereoWidenerSettings) => {
+    try {
+      getPlayer().setStereoWidenerParams({
+        width: params.width,
+        crossFeed: params.crossFeed,
+        haasEnabled: params.haasEnabled,
+        bypass: params.bypass,
+      });
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取立体声展宽当前参数
+  ipcMain.handle("player:getStereoWidenerParams", () => {
+    try {
+      return { success: true, data: getPlayer().getStereoWidenerParams() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取立体声展宽开关状态
+  ipcMain.handle("player:getStereoWidenerEnabled", () => {
+    try {
+      return { success: true, data: getPlayer().getStereoWidenerEnabled() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 配置响度归一化
+  ipcMain.handle(
+    "player:setLoudnessNormalizer",
+    (_event, enabled: boolean, params: LoudnessNormalizerSettings) => {
+      try {
+        getPlayer().setLoudnessNormalizer(enabled, {
+          targetLufs: params.targetLufs,
+          maxGainDb: params.maxGainDb,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 仅更新响度归一化参数
+  ipcMain.handle(
+    "player:setLoudnessNormalizerParams",
+    (_event, params: LoudnessNormalizerSettings) => {
+      try {
+        getPlayer().setLoudnessNormalizerParams({
+          targetLufs: params.targetLufs,
+          maxGainDb: params.maxGainDb,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 取响度归一化当前参数
+  ipcMain.handle("player:getLoudnessNormalizerParams", () => {
+    try {
+      return { success: true, data: getPlayer().getLoudnessNormalizerParams() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取响度归一化开关状态
+  ipcMain.handle("player:getLoudnessNormalizerEnabled", () => {
+    try {
+      return { success: true, data: getPlayer().getLoudnessNormalizerEnabled() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 配置神经网络上采样
+  ipcMain.handle(
+    "player:setNeuralUpsample",
+    (_event, enabled: boolean, backend: number, params: NeuralUpsampleSettings["params"]) => {
+      try {
+        getPlayer().setNeuralUpsample(enabled, backend, {
+          inputGainDb: params.inputGainDb,
+          wetMix: params.wetMix,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 仅更新神经网络上采样参数
+  ipcMain.handle(
+    "player:setNeuralUpsampleParams",
+    (_event, params: NeuralUpsampleSettings["params"]) => {
+      try {
+        getPlayer().setNeuralUpsampleParams({
+          inputGainDb: params.inputGainDb,
+          wetMix: params.wetMix,
+          bypass: params.bypass,
+        });
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
+
+  // 取神经网络上采样当前参数
+  ipcMain.handle("player:getNeuralUpsampleParams", () => {
+    try {
+      return { success: true, data: getPlayer().getNeuralUpsampleParams() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取神经网络上采样当前生效后端
+  ipcMain.handle("player:getNeuralUpsampleEffectiveBackend", () => {
+    try {
+      return { success: true, data: getPlayer().getNeuralUpsampleEffectiveBackend() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取神经网络上采样开关状态
+  ipcMain.handle("player:getNeuralUpsampleEnabled", () => {
+    try {
+      return { success: true, data: getPlayer().getNeuralUpsampleEnabled() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 加载 ONNX 模型
+  ipcMain.handle("player:loadNeuralModel", (_event, path: string) => {
+    try {
+      return { success: true, data: getPlayer().loadNeuralModel(path) };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取已加载的 ONNX 模型路径
+  ipcMain.handle("player:getNeuralModelPath", () => {
+    try {
+      return { success: true, data: getPlayer().getNeuralModelPath() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 配置空间音频（组合预设：开启时同步配置 StereoWidener + BassEnhancer + SuperRes）
+  // params: SpatialAudioSettings；引擎侧按预设值一次性下发三个 DSP
+  // userSuperRes 由 store 中 player.audioSuperResolution.params 提供（hpFreq/hpQ 等基础项沿用）
+  ipcMain.handle("player:setSpatialAudio", (_event, params: SpatialAudioSettings) => {
+    try {
+      const userSuperRes = store.get("player.audioSuperResolution.params") as
+        | SuperResParams
+        | undefined;
+      setSpatialAudio(params, userSuperRes);
+      return { success: true };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
     }
@@ -648,6 +955,26 @@ export const registerPlayerIpc = (): void => {
         `setFftEnabled(${enabled}) → subscribers=${fftSubscribers}, enabled=${shouldEnable}`,
       );
       return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 启用/禁用 FFT 等响度补偿（BetterLyrics 风格高频视觉强化）
+  // 经由 engine.setFftEqualLoudness 暂存 pending，避免 resetPlayer 重建后丢失用户偏好
+  ipcMain.handle("player:setFftEqualLoudness", (_event, enabled: boolean) => {
+    try {
+      setFftEqualLoudness(enabled);
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 取 FFT 等响度补偿开关状态
+  ipcMain.handle("player:getFftEqualLoudness", () => {
+    try {
+      return { success: true, data: getPlayer().getFftEqualLoudness() };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
     }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CoverItem } from "@/types/artist";
 import { fetchDjRecommend } from "@/apis/dj/netease";
+import { navigateToRadio } from "@/utils/navigate";
 
 const { t } = useI18n();
 
@@ -19,6 +20,11 @@ const load = async (): Promise<void> => {
   } finally {
     loading.value = false;
   }
+};
+
+/** 点击电台卡片跳转详情 */
+const onClick = (item: CoverItem): void => {
+  navigateToRadio(item.id, { name: item.title });
 };
 
 onMounted(load);
@@ -55,7 +61,13 @@ onMounted(load);
       </div>
       <!-- 电台列表 -->
       <div v-else-if="radios.length > 0" key="list" class="min-h-0 flex-1">
-        <CoverList :items="radios" :virtual="false" :padding-x="20" :padding-bottom="24" />
+        <CoverList
+          :items="radios"
+          :virtual="false"
+          :padding-x="20"
+          :padding-bottom="24"
+          @click="onClick"
+        />
       </div>
       <!-- 空状态 -->
       <div v-else key="empty" class="flex flex-1 items-center justify-center">

@@ -51,9 +51,13 @@ const toMvItem = (raw: RawMv): MvItem => ({
   playCount: raw.playCount,
 });
 
-/** MV 首页（最新 MV） */
-export const fetchMvFirst = async (area = "", limit = 30): Promise<MvItem[]> => {
-  const body = await neteaseApi.mv_first<{ data?: RawMv[] }>({ area, limit });
+/** MV 首页（最新 MV，支持分页）
+ * @param area - 地区，空字符串为全部
+ * @param limit - 单页数量
+ * @param offset - 偏移量，默认 0
+ */
+export const fetchMvFirst = async (area = "", limit = 30, offset = 0): Promise<MvItem[]> => {
+  const body = await neteaseApi.mv_first<{ data?: RawMv[] }>({ area, limit, offset });
   return (body?.data ?? []).map(toMvItem);
 };
 

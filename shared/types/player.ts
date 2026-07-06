@@ -1,6 +1,14 @@
 import type { LyricFormat } from "./lyrics";
 import type { Platform } from "./platform";
-import type { EqualizerBand } from "./settings";
+import type {
+  BassEnhancerSettings,
+  EqualizerBand,
+  LoudnessNormalizerSettings,
+  NeuralUpsampleSettings,
+  SpatialAudioSettings,
+  StereoWidenerSettings,
+  SuperResParams,
+} from "./settings";
 
 /** 播放器状态 */
 export type PlayerState = "idle" | "loading" | "playing" | "paused" | "stopped";
@@ -13,6 +21,9 @@ export type ShuffleMode = "off" | "on";
 
 /** 歌曲来源：本地 / 流媒体 / 在线平台 */
 export type TrackSource = "local" | "streaming" | Platform;
+
+/** 本地加密音频格式（unlock-music 解密路径，由 audio-engine 在解码时自动解密） */
+export type EncryptionFormat = "ncm" | "qmc" | "kgm" | "kwm" | "mflac" | "tm";
 
 /** 歌手 */
 export interface Artist {
@@ -212,6 +223,10 @@ export interface PlayerApi {
   setFftEnabled: (enabled: boolean) => Promise<IpcResponse>;
   /** 获取 FFT 频谱数据 */
   getFftData: () => Promise<IpcResponse<number[]>>;
+  /** 设置 FFT 等响度补偿开关（BetterLyrics 风格：20Hz gain=1.0 → 20kHz gain=12.0 对数插值） */
+  setFftEqualLoudness: (enabled: boolean) => Promise<IpcResponse>;
+  /** 获取 FFT 等响度补偿开关状态 */
+  getFftEqualLoudness: () => Promise<IpcResponse<boolean>>;
   /** 设置渐入渐出时长（毫秒） */
   setFadeDuration: (ms: number) => Promise<IpcResponse>;
   /** 获取渐入渐出时长（毫秒） */
@@ -253,9 +268,64 @@ export interface PlayerApi {
   /** 设置环绕声增益（倍数，1.0 = 原始，>1 扩展立体声场） */
   setSurroundGain: (gain: number) => Promise<IpcResponse>;
   /** 配置音频超分（高频激励器），backend: 0=CPU, 1=GPU, 2=NPU（GPU/NPU 不可用回退 CPU） */
-  setAudioSuperResolution: (enabled: boolean, backend: number) => Promise<IpcResponse>;
+  setAudioSuperResolution: (
+    enabled: boolean,
+    backend: number,
+    params: SuperResParams,
+  ) => Promise<IpcResponse>;
+  /** 仅更新超分参数（不改变 enabled / backend） */
+  setAudioSuperResolutionParams: (params: SuperResParams) => Promise<IpcResponse>;
+  /** 取音频超分当前参数 */
+  getAudioSuperResolutionParams: () => Promise<IpcResponse<SuperResParams>>;
   /** 取音频超分当前实际生效后端（GPU/NPU 不可用时回退为 0=CPU） */
   getAudioSuperResolutionEffectiveBackend: () => Promise<IpcResponse<number>>;
+  /** 配置低音增强（2 阶 low-shelf + tanh 软饱和） */
+  setBassEnhancer: (enabled: boolean, params: BassEnhancerSettings) => Promise<IpcResponse>;
+  /** 仅更新低音增强参数 */
+  setBassEnhancerParams: (params: BassEnhancerSettings) => Promise<IpcResponse>;
+  /** 取低音增强当前参数 */
+  getBassEnhancerParams: () => Promise<IpcResponse<BassEnhancerSettings>>;
+  /** 取低音增强开关状态 */
+  getBassEnhancerEnabled: () => Promise<IpcResponse<boolean>>;
+  /** 配置立体声展宽（Mid-Side 处理） */
+  setStereoWidener: (enabled: boolean, params: StereoWidenerSettings) => Promise<IpcResponse>;
+  /** 仅更新立体声展宽参数 */
+  setStereoWidenerParams: (params: StereoWidenerSettings) => Promise<IpcResponse>;
+  /** 取立体声展宽当前参数 */
+  getStereoWidenerParams: () => Promise<IpcResponse<StereoWidenerSettings>>;
+  /** 取立体声展宽开关状态 */
+  getStereoWidenerEnabled: () => Promise<IpcResponse<boolean>>;
+  /** 配置响度归一化（500ms 滑动窗口 RMS） */
+  setLoudnessNormalizer: (
+    enabled: boolean,
+    params: LoudnessNormalizerSettings,
+  ) => Promise<IpcResponse>;
+  /** 仅更新响度归一化参数 */
+  setLoudnessNormalizerParams: (params: LoudnessNormalizerSettings) => Promise<IpcResponse>;
+  /** 取响度归一化当前参数 */
+  getLoudnessNormalizerParams: () => Promise<IpcResponse<LoudnessNormalizerSettings>>;
+  /** 取响度归一化开关状态 */
+  getLoudnessNormalizerEnabled: () => Promise<IpcResponse<boolean>>;
+  /** 配置神经网络上采样（框架就绪 + 算法兜底：无 ONNX 模型时直通） */
+  setNeuralUpsample: (
+    enabled: boolean,
+    backend: number,
+    params: NeuralUpsampleSettings["params"],
+  ) => Promise<IpcResponse>;
+  /** 仅更新神经网络上采样参数 */
+  setNeuralUpsampleParams: (params: NeuralUpsampleSettings["params"]) => Promise<IpcResponse>;
+  /** 取神经网络上采样当前参数 */
+  getNeuralUpsampleParams: () => Promise<IpcResponse<NeuralUpsampleSettings["params"]>>;
+  /** 取神经网络上采样当前生效后端（Onnx 模型未加载时回退为 0=Fallback） */
+  getNeuralUpsampleEffectiveBackend: () => Promise<IpcResponse<number>>;
+  /** 取神经网络上采样开关状态 */
+  getNeuralUpsampleEnabled: () => Promise<IpcResponse<boolean>>;
+  /** 加载 ONNX 模型（成功返回 true） */
+  loadNeuralModel: (path: string) => Promise<IpcResponse<boolean>>;
+  /** 取已加载的 ONNX 模型路径（null = 未加载） */
+  getNeuralModelPath: () => Promise<IpcResponse<string | null>>;
+  /** 配置空间音频（组合预设：开启时同步配置 StereoWidener + BassEnhancer + SuperRes） */
+  setSpatialAudio: (params: SpatialAudioSettings) => Promise<IpcResponse>;
   /** 设置播放速度（0.5 ~ 2.0） */
   setSpeed: (speed: number) => Promise<IpcResponse>;
   /** 设置音调偏移（半音 -12 ~ 12） */

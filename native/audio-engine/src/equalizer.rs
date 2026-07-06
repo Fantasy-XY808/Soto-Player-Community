@@ -459,11 +459,6 @@ impl Equalizer {
         self.enabled
     }
 
-    /// 取当前频段数
-    pub fn band_count(&self) -> usize {
-        self.bands.len()
-    }
-
     /// 取所有频段参数
     pub fn band_params(&self) -> Vec<BandParams> {
         self.bands.iter().map(|b| b.params).collect()

@@ -26,6 +26,8 @@ export interface SpringResult {
   setTarget: (target: number) => void;
   /** 立即跳转到指定值，无动画 */
   jumpTo: (value: number) => void;
+  /** 施加速度冲量（按压/释放效果），不改变目标值 */
+  impulse: (delta: number) => void;
   /** 停止动画 */
   stop: () => void;
 }
@@ -98,6 +100,14 @@ export function useSpring(options: SpringOptions = {}): SpringResult {
     }
   };
 
+  const impulse = (delta: number): void => {
+    velocity.value += delta;
+    if (rafId === null) {
+      lastTime = performance.now();
+      rafId = requestAnimationFrame(tick);
+    }
+  };
+
   const stop = (): void => {
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
@@ -107,5 +117,5 @@ export function useSpring(options: SpringOptions = {}): SpringResult {
 
   onBeforeUnmount(stop);
 
-  return { value, velocity, setTarget, jumpTo, stop };
+  return { value, velocity, setTarget, jumpTo, impulse, stop };
 }

@@ -347,6 +347,48 @@ const dynamicIslandSection: SettingSection = {
       binding: { store: "settings", path: "system.dynamicIsland.enableCoverFlip" },
       defaultValue: true,
     },
+    {
+      key: "dynamicIslandMotionBlur",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.motionBlur" },
+      defaultValue: true,
+    },
+    {
+      key: "dynamicIslandAutoHide",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.autoHide" },
+      defaultValue: false,
+      childrenCondition: () => useSettingsStore().system.dynamicIsland.autoHide,
+      children: [
+        {
+          key: "dynamicIslandAutoHideDelay",
+          type: "slider",
+          binding: { store: "settings", path: "system.dynamicIsland.autoHideDelay" },
+          min: 3,
+          max: 60,
+          step: 1,
+          defaultValue: 5,
+          marks: { 3: "3s", 5: "5s", 15: "15s", 30: "30s", 60: "60s" },
+        },
+      ],
+    },
+    // macOS 全屏为独占空间语义，无需此抑制；仅 Windows/Linux 显示
+    ...(!isMac
+      ? [
+          {
+            key: "dynamicIslandSuppressFullscreen",
+            type: "switch" as const,
+            binding: { store: "settings" as const, path: "system.dynamicIsland.suppressFullscreen" },
+            defaultValue: true,
+          },
+        ]
+      : []),
+    {
+      key: "dynamicIslandAutoStart",
+      type: "switch",
+      binding: { store: "settings", path: "system.dynamicIsland.autoStart" },
+      defaultValue: false,
+    },
   ],
 };
 

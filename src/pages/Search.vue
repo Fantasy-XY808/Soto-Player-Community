@@ -2,24 +2,33 @@
 import type { Track } from "@shared/types/player";
 import { ALL_PLATFORMS, PLATFORM_SHORT_NAME, type Platform } from "@shared/types/platform";
 import type { CoverItem } from "@/types/artist";
-import { searchSongs, searchAlbums, searchArtists, searchPlaylists } from "@/apis/search";
+import type { MvItem } from "@/apis/mv/netease";
+import {
+  searchSongs,
+  searchAlbums,
+  searchArtists,
+  searchPlaylists,
+  searchMvs,
+} from "@/apis/search";
 import SongList from "@/components/list/SongList.vue";
 import CoverList from "@/components/list/CoverList.vue";
 import { useStatusStore } from "@/stores/status";
-import { navigateToAlbum, navigateToPlaylist } from "@/utils/navigate";
+import { navigateToAlbum, navigateToPlaylist, navigateToMv } from "@/utils/navigate";
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
 
-type TabKey = "songs" | "albums" | "artists" | "playlists";
+type TabKey = "songs" | "albums" | "artists" | "playlists" | "mvs";
 
-const TAB_KEYS: readonly TabKey[] = ["songs", "albums", "artists", "playlists"];
+const TAB_KEYS: readonly TabKey[] = ["songs", "albums", "artists", "playlists", "mvs"];
 
 /** 当前 tab */
 const activeTab = computed<TabKey>(() => {
   const tab = route.query.tab;
+  // MV tab 仅网易云可用；切到其它平台时回退到 songs
+  if (tab === "mvs" && status.searchPlatform !== "netease") return "songs";
   return typeof tab === "string" && (TAB_KEYS as readonly string[]).includes(tab)
     ? (tab as TabKey)
     : "songs";
@@ -33,12 +42,19 @@ const keyword = computed(() => {
   return typeof q === "string" ? q.trim() : "";
 });
 
-const tabs = computed(() => [
-  { key: "songs", label: t("search.tabs.songs") },
-  { key: "albums", label: t("search.tabs.albums") },
-  { key: "artists", label: t("search.tabs.artists") },
-  { key: "playlists", label: t("search.tabs.playlists") },
-]);
+const tabs = computed(() => {
+  const base = [
+    { key: "songs", label: t("search.tabs.songs") },
+    { key: "albums", label: t("search.tabs.albums") },
+    { key: "artists", label: t("search.tabs.artists") },
+    { key: "playlists", label: t("search.tabs.playlists") },
+  ];
+  // MV 搜索仅网易云支持，仅在该平台展示 tab
+  if (status.searchPlatform === "netease") {
+    base.push({ key: "mvs", label: t("search.tabs.mvs") });
+  }
+  return base;
+});
 
 const platformTabs = ALL_PLATFORMS.map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
 
@@ -65,6 +81,7 @@ const states = reactive({
   albums: createState<CoverItem>(),
   artists: createState<CoverItem>(),
   playlists: createState<CoverItem>(),
+  mvs: createState<MvItem>(),
 });
 
 const error = ref("");
@@ -75,6 +92,7 @@ const fetchers = {
   albums: searchAlbums,
   artists: searchArtists,
   playlists: searchPlaylists,
+  mvs: searchMvs,
 } as const;
 
 /**
@@ -167,6 +185,18 @@ const onReachBottom = (tab: TabKey): void => {
   fetchTab(tab, true);
 };
 
+/** MV 网格滚动触底（无虚拟滚动，需手动监听） */
+const onMvGridScroll = (e: Event): void => {
+  const el = e.target as HTMLElement;
+  if (
+    el.scrollHeight - el.scrollTop - el.clientHeight < 240 &&
+    states.mvs.hasMore &&
+    !states.mvs.loadingMore
+  ) {
+    onReachBottom("mvs");
+  }
+};
+
 /** 当前 tab 首屏加载中 */
 const isInitialLoading = computed(() => {
   const state = states[activeTab.value];
@@ -221,11 +251,10 @@ const isEmptyResult = computed(() => {
         <div class="text-xs opacity-80 break-all max-w-xs">{{ error }}</div>
       </div>
     </div>
-    <!-- 首次加载 -->
-    <div v-else-if="isInitialLoading" class="flex-1 flex items-center justify-center">
-      <div class="text-center text-on-surface-variant/60">
-        <SLoading class="text-4xl text-primary/70 mb-4 mx-auto block" />
-        <div class="text-sm">{{ t("common.loading") }}</div>
+    <!-- 首次加载：骨架屏占位，比旋转图标更接近最终布局 -->
+    <div v-else-if="isInitialLoading" class="flex-1 min-h-0 px-5 py-3">
+      <div class="flex flex-col gap-2">
+        <SSkeleton v-for="i in 8" :key="i" class="h-22" />
       </div>
     </div>
     <!-- 无结果 -->
@@ -273,7 +302,7 @@ const isEmptyResult = computed(() => {
         @reach-bottom="onReachBottom('artists')"
       />
       <CoverList
-        v-else
+        v-else-if="activeTab === 'playlists'"
         :items="states.playlists.items"
         :padding-x="20"
         :padding-top="8"
@@ -285,6 +314,35 @@ const isEmptyResult = computed(() => {
         "
         @reach-bottom="onReachBottom('playlists')"
       />
+      <!-- MV 网格（与 MvBrowse 同款卡片，点击跳转详情） -->
+      <div v-else class="min-h-0 flex-1 overflow-y-auto" @scroll="onMvGridScroll">
+        <div class="grid grid-cols-2 gap-4 px-5 pb-6 md:grid-cols-3 lg:grid-cols-4">
+          <div
+            v-for="mv in states.mvs.items"
+            :key="mv.id"
+            class="group flex cursor-pointer flex-col gap-2"
+            @click="navigateToMv(mv.id, { name: mv.name })"
+          >
+            <div class="relative aspect-video overflow-hidden rounded-lg">
+              <SImg
+                :src="mv.cover"
+                :alt="mv.name"
+                class="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div
+                class="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              >
+                <IconLucidePlay class="size-10 text-white" />
+              </div>
+            </div>
+            <div class="truncate text-sm font-medium text-on-surface">{{ mv.name }}</div>
+            <div class="truncate text-xs text-on-surface-variant/50">{{ mv.artistName }}</div>
+          </div>
+        </div>
+        <div v-if="states.mvs.hasMore" class="flex justify-center py-4">
+          <SLoading v-if="states.mvs.loadingMore" class="text-2xl text-primary/70" />
+        </div>
+      </div>
     </div>
   </div>
 </template>

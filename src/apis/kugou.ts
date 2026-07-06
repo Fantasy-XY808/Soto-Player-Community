@@ -11,7 +11,7 @@ import type { ApiCallResponse } from "@shared/types/apis";
 
 /**
  * 调用 KG API，返回业务数据
- * @param name 接口名（search / lyric）
+ * @param name 接口名（search / lyric / song_url）
  * @param params 接口参数
  */
 export const kugouCall = async <T = unknown>(

@@ -8,6 +8,9 @@ build
 **/target
 native/*/*.node
 # native/*/index.d.ts
+# EasyTier 二进制（运行 pnpm copy-easytier 从 参考项目 复制，或 pnpm download-easytier 下载）
+native/easytier/*/
+native/easytier/*.zip
 
 # Docs build
 docs/.vitepress/cache
@@ -53,3 +56,5 @@ package-lock.json
 参考项目/
 Plan.md
 TO-DO.md
+.cargo/
+.dbg/

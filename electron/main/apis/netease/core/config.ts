@@ -22,6 +22,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 export const DOMAIN = "https://music.163.com";
 /** 客户端接口域名（api/eapi） */
 export const API_DOMAIN = "https://interface.music.163.com";
+/** xeapi 域名（反爬加密接口，如游客注册） */
+export const XEAPI_DOMAIN = "https://interface3.music.163.com";
 /** 客户端日志域名 */
 export const CLIENT_LOG_DOMAIN = "https://clientlog.music.163.com";
 /** NCBL 加密日志域名 */
@@ -86,4 +88,4 @@ export const UA_MAP = {
 } as const;
 
 /** 支持的加密方式 */
-export type CryptoMode = "weapi" | "linuxapi" | "eapi" | "api";
+export type CryptoMode = "weapi" | "linuxapi" | "eapi" | "api" | "xeapi";

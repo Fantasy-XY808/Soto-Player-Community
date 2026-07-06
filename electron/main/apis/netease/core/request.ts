@@ -13,11 +13,13 @@ import {
   OS_MAP,
   SPECIAL_STATUS_CODES,
   UA_MAP,
+  XEAPI_DOMAIN,
   type CryptoMode,
 } from "./config";
 import { cookieObjToString, cookieToJson } from "./cookie";
 import * as encrypt from "./crypto";
 import { getAnonymousToken, getDeviceId } from "./device";
+import { ensureXeapiKey, getXeapiSession, updateXeapiSession } from "./xeapi";
 
 /** 调用方传入的可选参数 */
 export interface RequestOptions {
@@ -115,16 +117,8 @@ const processCookieObject = (
   }
 
   if (!processed.MUSIC_U) {
-    // 未登录态：优先用内存中的 anonymousToken（刚刚注册的，最新）
-    // 持久化的 session.MUSIC_A 可能跨重启后已被服务端失效，不信任它
-    const anon = getAnonymousToken();
-    if (anon) {
-      processed.MUSIC_A = anon;
-    } else if (processed.MUSIC_A) {
-      // 内存没有但 session 有：保留 session 的，让服务端判定（失败则由 ensureAnonymousToken 触发重注册）
-    } else {
-      delete processed.MUSIC_A;
-    }
+    processed.MUSIC_A = processed.MUSIC_A || getAnonymousToken();
+    if (!processed.MUSIC_A) delete processed.MUSIC_A;
   }
 
   return processed;
@@ -194,6 +188,40 @@ export const createRequest = async (
       url = (options.domain || DOMAIN) + "/api/linux/forward";
       break;
     }
+    case "xeapi": {
+      const publicKeyState = await ensureXeapiKey(cookie.deviceId);
+      const xeapiOs = cookie.os === "android" ? cookie.os : "android";
+      const xeapiAppver = cookie.os === "android" && cookie.appver ? cookie.appver : "9.1.65";
+      const xeapiOsver = cookie.os === "android" && cookie.osver ? cookie.osver : "16";
+      const xeapiBuildver = cookie.buildver || Date.now().toString().slice(0, 10);
+      headers["User-Agent"] = options.ua || chooseUserAgent("api", "android");
+      headers["X-Client-Enc-State"] = "ENCRYPTED";
+      headers["x-aeapi"] = "true";
+      headers["x-deviceid"] = cookie.deviceId;
+      headers["x-os"] = xeapiOs;
+      headers["x-osver"] = xeapiOsver;
+      headers["x-appver"] = xeapiAppver;
+      headers["x-sdeviceid"] = cookie.sDeviceId || cookie.deviceId;
+      headers["x-buildver"] = xeapiBuildver;
+      if (cookie.MUSIC_U) headers["x-music-u"] = cookie.MUSIC_U;
+      headers["Cookie"] = cookieObjToString({
+        ...cookie,
+        os: xeapiOs,
+        osver: xeapiOsver,
+        appver: xeapiAppver,
+        buildver: xeapiBuildver,
+        sDeviceId: cookie.sDeviceId || cookie.deviceId,
+      });
+      const session = getXeapiSession();
+      url = (options.domain || XEAPI_DOMAIN) + "/xeapi/" + uri.slice(5);
+      encryptData = encrypt.xeapi(uri, data, {
+        publicKeyState,
+        sessionId: session.sessionId,
+        sessionKey: session.sessionKey,
+        os: xeapiOs,
+      });
+      break;
+    }
     case "eapi":
     case "api": {
       const header: Record<string, string> = {
@@ -233,7 +261,8 @@ export const createRequest = async (
   headers["Content-Type"] = "application/x-www-form-urlencoded";
 
   const answer: RequestResponse = { status: 500, body: {}, cookie: [] };
-  const needDecrypt = (crypto === "eapi" || crypto === "weapi") && useER;
+  const isXeapi = crypto === "xeapi";
+  const needDecrypt = isXeapi || ((crypto === "eapi" || crypto === "weapi") && useER);
 
   let res: Response;
   try {
@@ -250,13 +279,21 @@ export const createRequest = async (
     (res.headers.get("set-cookie") ? [res.headers.get("set-cookie") as string] : []);
   answer.cookie = setCookie.map((x) => x.replace(/\s*Domain=[^(;|$)]+;*/, ""));
 
+  // xeapi 会话密钥由响应头下发，缓存供后续请求复用
+  if (isXeapi) {
+    const ssid = res.headers.get("x-encr-ssid");
+    const sskey = res.headers.get("x-encr-sskey");
+    if (ssid && sskey) updateXeapiSession(ssid, sskey);
+  }
+
   let parsed: NeteaseBody;
   try {
     if (needDecrypt) {
       const buf = Buffer.from(await res.arrayBuffer());
-      parsed = encrypt.eapiResDecrypt(
-        buf.toString("hex").toUpperCase(),
-        headers["x-aeapi"] === "true",
+      parsed = (
+        isXeapi
+          ? encrypt.xeapiResDecrypt(buf)
+          : encrypt.eapiResDecrypt(buf.toString("hex").toUpperCase(), headers["x-aeapi"] === "true")
       ) as NeteaseBody;
     } else {
       const text = await res.text();

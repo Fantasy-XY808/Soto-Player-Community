@@ -22,8 +22,9 @@ pub struct Shared {
     is_stopping: AtomicBool,
     /// 已被 rodio 消费的交错采样数（含所有声道，即 stereo 时每帧 +2）
     samples_consumed: AtomicU64,
-    /// 输出采样率（创建时确定，不可变）
-    sample_rate: u32,
+    /// 输出采样率（load/seek 时按音源采样率自适应更新，见 decoder::start_decode）
+    /// 为位置计算与响度分析器提供正确的样本率基准
+    sample_rate: AtomicU32,
     /// 输出声道数（创建时确定，不可变）
     channels: u16,
     /// 所有数据已被消费完毕（DecoderSource 返回 None 时设置）
@@ -57,7 +58,7 @@ impl Shared {
             is_eof: AtomicBool::new(false),
             is_stopping: AtomicBool::new(false),
             samples_consumed: AtomicU64::new(0),
-            sample_rate,
+            sample_rate: AtomicU32::new(sample_rate),
             channels,
             all_consumed: AtomicBool::new(false),
             decode_failed: AtomicBool::new(false),
@@ -79,9 +80,15 @@ impl Shared {
             .store(gain.to_bits(), Ordering::Relaxed);
     }
 
-    /// 输出采样率
+    /// 输出采样率（player_resampler 输出率，用于位置计算与响度分析）
     pub fn sample_rate(&self) -> u32 {
-        self.sample_rate
+        self.sample_rate.load(Ordering::Relaxed)
+    }
+
+    /// 更新输出采样率（load/seek 时由 decoder 按音源采样率自适应调用）
+    /// 必须在解码线程启动前调用，避免与 run_decoding_loop 内的读取竞态
+    pub fn set_sample_rate(&self, sample_rate: u32) {
+        self.sample_rate.store(sample_rate, Ordering::Relaxed);
     }
 
     /// 设置归一化开关
@@ -147,7 +154,8 @@ impl Shared {
     /// 基于实际消费采样数的精确播放位置（秒）
     pub fn consumed_position(&self) -> f64 {
         let samples = self.samples_consumed.load(Ordering::Relaxed);
-        samples as f64 / self.sample_rate as f64 / self.channels as f64
+        let rate = self.sample_rate.load(Ordering::Relaxed) as f64;
+        samples as f64 / rate / self.channels as f64
     }
 
     /// 阻塞等待缓冲区有空间或收到停止信号，返回 false 表示应停止

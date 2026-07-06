@@ -8,6 +8,42 @@ defineOptions({ inheritAttrs: false });
 const { t } = useI18n();
 const eq = useEqualizer();
 
+/** 主题色缓存（canvas 绘制用，跟随主题切换） */
+const themeColors = reactive({
+  primary: "",
+  onSurface: "",
+  onSurfaceVariant: "",
+  surfaceContainer: "",
+});
+/** 从 CSS 变量读取主题色，未定义时回退到原硬编码值 */
+const readThemeColors = (): void => {
+  const style = getComputedStyle(document.documentElement);
+  themeColors.primary = style.getPropertyValue("--color-primary").trim() || "rgb(254, 121, 113)";
+  themeColors.onSurface =
+    style.getPropertyValue("--color-on-surface").trim() || "rgb(255, 255, 255)";
+  themeColors.onSurfaceVariant =
+    style.getPropertyValue("--color-on-surface-variant").trim() || "rgba(255, 255, 255, 0.6)";
+  themeColors.surfaceContainer =
+    style.getPropertyValue("--color-surface-container").trim() || "rgb(28, 28, 28)";
+};
+/** 颜色加 alpha（支持 hex / rgb / rgba 输入），用于 canvas 半透明绘制 */
+const withAlpha = (color: string, alpha: number): string => {
+  const trimmed = color.trim();
+  if (trimmed.startsWith("#")) {
+    const hex = trimmed.slice(1);
+    const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
+    const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
+    const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = trimmed.match(/rgba?\(([^)]+)\)/);
+  if (m) {
+    const parts = m[1].split(",").map((p) => p.trim());
+    return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+  }
+  return trimmed;
+};
+
 /** 频响曲线画布元素 */
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 /** 画布容器，用于 ResizeObserver 监听宽度 */
@@ -113,14 +149,13 @@ const drawCurve = (): void => {
   ctx.clearRect(0, 0, cssW, cssH);
 
   // 背景
-  const bg = getComputedStyle(canvas).getPropertyValue("--color-surface-container") || "#1c1c1c";
-  ctx.fillStyle = bg.trim();
+  ctx.fillStyle = themeColors.surfaceContainer;
   ctx.fillRect(0, 0, cssW, cssH);
 
   // 网格
-  const gridColor = "rgba(255, 255, 255, 0.08)";
-  const axisColor = "rgba(255, 255, 255, 0.18)";
-  const labelColor = "rgba(255, 255, 255, 0.5)";
+  const gridColor = withAlpha(themeColors.onSurface, 0.08);
+  const axisColor = withAlpha(themeColors.onSurface, 0.18);
+  const labelColor = withAlpha(themeColors.onSurface, 0.5);
   ctx.lineWidth = 1;
   ctx.font = "10px ui-monospace, monospace";
 
@@ -158,7 +193,7 @@ const drawCurve = (): void => {
   // 频响曲线
   const pts = responseDb.value;
   if (pts.length > 1) {
-    ctx.strokeStyle = "rgb(254, 121, 113)";
+    ctx.strokeStyle = themeColors.primary;
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
@@ -171,7 +206,7 @@ const drawCurve = (): void => {
 
     // 0dB 以下的填充
     const zeroY = gainToY(0);
-    ctx.fillStyle = "rgba(254, 121, 113, 0.12)";
+    ctx.fillStyle = withAlpha(themeColors.primary, 0.12);
     ctx.beginPath();
     ctx.moveTo(freqToX(freqs.value[0]), zeroY);
     for (let i = 0; i < pts.length; i++) {
@@ -182,10 +217,12 @@ const drawCurve = (): void => {
     ctx.fill();
   }
 
-  // 频段控制点
-  const pointColor = eq.bypass.value ? "rgba(160, 160, 160, 0.6)" : "rgb(255, 200, 80)";
-  const pointBorderColor = "rgba(0, 0, 0, 0.6)";
-  const selectedColor = "rgb(120, 200, 255)";
+  // 频段控制点：普通用 onSurfaceVariant，选中用 primary，标号用 surfaceContainer 反色
+  const pointColor = eq.bypass.value
+    ? withAlpha(themeColors.onSurfaceVariant, 0.6)
+    : themeColors.primary;
+  const pointBorderColor = withAlpha(themeColors.onSurface, 0.6);
+  const selectedColor = themeColors.onSurface;
   for (const [idx, band] of eq.bands.value.entries()) {
     if (band.filterType === EqualizerFilterType.Passthrough) continue;
     const x = freqToX(band.freq);
@@ -200,7 +237,7 @@ const drawCurve = (): void => {
     ctx.stroke();
     // 选中频段标号
     if (isSelected) {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fillStyle = themeColors.surfaceContainer;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = "bold 10px ui-sans-serif, system-ui";
@@ -211,7 +248,10 @@ const drawCurve = (): void => {
 
 /** ResizeObserver 监听容器宽度变化 */
 let resizeObserver: ResizeObserver | null = null;
+/** 主题切换监听（prefers-color-scheme + 主题 store 触发的 CSS 变量变更） */
+let themeObserver: MutationObserver | null = null;
 onMounted(() => {
+  readThemeColors();
   void refreshResponse();
   resizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
@@ -223,6 +263,15 @@ onMounted(() => {
     }
   });
   if (canvasWrapRef.value) resizeObserver.observe(canvasWrapRef.value);
+  // 监听 documentElement 的 style/class 属性变化（主题切换会改 CSS 变量）
+  themeObserver = new MutationObserver(() => {
+    readThemeColors();
+    drawCurve();
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["style", "class", "data-theme"],
+  });
   watch(responseDb, drawCurve, { flush: "post" });
   watch([canvasW, canvasH], drawCurve, { flush: "post" });
   watch(() => eq.bands.value, drawCurve, { deep: true, flush: "post" });
@@ -235,6 +284,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
+  themeObserver?.disconnect();
+  themeObserver = null;
   stopLevelPolling();
   if (refreshTimer) clearTimeout(refreshTimer);
 });
@@ -827,7 +878,7 @@ const formatSurround = (value: number): string => `${value.toFixed(1)}x`;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: rgba(254, 121, 113, 0.9);
+  color: var(--color-primary, rgba(254, 121, 113, 0.9));
   background: rgba(0, 0, 0, 0.4);
   padding: 2px 8px;
   border-radius: 4px;
@@ -983,7 +1034,7 @@ const formatSurround = (value: number): string => `${value.toFixed(1)}x`;
   cursor: pointer;
 }
 .band-remove:hover:not(:disabled) {
-  background: rgba(254, 121, 113, 0.1);
+  background: var(--color-primary-container, rgba(254, 121, 113, 0.1));
 }
 .custom-presets {
   display: flex;
@@ -1033,7 +1084,7 @@ const formatSurround = (value: number): string => `${value.toFixed(1)}x`;
 }
 .custom-preset-delete:hover {
   color: var(--color-error, rgb(254, 121, 113));
-  background: rgba(254, 121, 113, 0.1);
+  background: var(--color-primary-container, rgba(254, 121, 113, 0.1));
 }
 .eq-footer {
   display: flex;

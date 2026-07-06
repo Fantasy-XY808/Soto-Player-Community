@@ -5,6 +5,29 @@ import { useUserStore } from "@/stores/user";
 import { netease as neteaseApi } from "@/apis/netease";
 import { songsToTracks } from "@/utils/format/netease";
 
+/** 拼接艺术家名称（用于解灰源关键词） */
+const formatArtists = (artists: Track["artists"]): string => {
+  if (!artists?.length) return "";
+  return artists.map((ar) => ar.name).join(" / ");
+};
+
+/**
+ * 调用解灰源 IPC，按配置顺序尝试获取可播放 URL
+ * @param track - 原曲元数据
+ * @returns 解灰得到的 URL 或 null
+ */
+const resolveUnblockUrl = async (track: Track): Promise<string | null> => {
+  const artist = formatArtists(track.artists);
+  const keyword = artist ? `${track.title} - ${artist}` : track.title;
+  const res = await window.api.unblock.resolve({
+    keyword,
+    songName: track.title,
+    artist,
+  });
+  if (!res?.success) return null;
+  return res.data.url;
+};
+
 /**
  * 按 ID 批量取歌曲详情
  * @param ids - 网易云 songId 列表
@@ -47,19 +70,48 @@ const resolveAllowedLevel = (songLevel: QualityLevel): QualityLevel => {
 
 /**
  * 解析网易云 Track 的可播放 URL
- * VIP 试听片段 / 无版权 → 返回 null
- * @param track - track.id 为云端 songId
+ * VIP 试听片段 / 无版权 → 走解灰源 fallback；仍失败返回 null
+ * 电台节目（track.extId 存节目 id）走 dj/program/url，常规歌曲走 song/url v1
+ * @param track - track.id 为云端 songId；track.extId 为电台节目 id 时走节目接口
  * @param songLevel - 音质偏好；实际可用级别取决于账号权限
  */
 export const resolveNeteaseUrl = async (
   track: Track,
   songLevel: QualityLevel,
 ): Promise<string | null> => {
+  // 电台节目：mainSong.id 不在 song_url 覆盖范围，必须走 dj/program/url
+  if (track.extId) {
+    const br = levelToBr(resolveAllowedLevel(songLevel));
+    const body = await neteaseApi.dj_program_url<{ data?: { url?: string } }>({
+      id: track.extId,
+      br,
+    });
+    const url = body?.data?.url;
+    return url || null;
+  }
   const level = NETEASE_LEVEL[resolveAllowedLevel(songLevel)];
   const body = await neteaseApi.song_url({ id: track.id, level });
   const item = body?.data?.[0];
-  if (!item?.url || item.freeTrialInfo) return null;
+  // 试听片段 / 无版权 → 尝试解灰源
+  if (!item?.url || item.freeTrialInfo) {
+    return resolveUnblockUrl(track);
+  }
   return item.url;
+};
+
+/** 音质档位 → dj/program/url 的 br 码率参数 */
+const levelToBr = (level: QualityLevel): number => {
+  const map: Record<QualityLevel, number> = {
+    lq: 128_000,
+    sq: 192_000,
+    hq: 320_000,
+    lossless: 999_000,
+    "hi-res": 999_000,
+    jyeffect: 999_000,
+    sky: 999_000,
+    jymaster: 999_000,
+  };
+  return map[level] ?? 320_000;
 };
 
 /** 网易云下载源（带格式与体积） */

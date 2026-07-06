@@ -5,7 +5,12 @@ import { getHotSearches, type HotSearchItem } from "@/apis/search/hot";
 import { getSearchSuggest, type SuggestData } from "@/apis/search/suggest";
 import { songsByIds as getNeteaseSongsByIds } from "@/apis/song/netease";
 import { formatCompact } from "@/utils/format";
-import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import {
+  navigateToAlbum,
+  navigateToArtist,
+  navigateToMv,
+  navigateToPlaylist,
+} from "@/utils/navigate";
 import * as player from "@/core/player";
 
 const { t, locale } = useI18n();
@@ -35,7 +40,7 @@ const loadHot = async (): Promise<void> => {
 };
 
 /** 搜索建议 */
-const EMPTY_SUGGEST: SuggestData = { songs: [], albums: [], artists: [], playlists: [] };
+const EMPTY_SUGGEST: SuggestData = { songs: [], albums: [], artists: [], playlists: [], mvs: [] };
 const suggest = ref<SuggestData>({ ...EMPTY_SUGGEST });
 
 const loadSuggest = useDebounceFn(async (keyword: string) => {
@@ -44,7 +49,7 @@ const loadSuggest = useDebounceFn(async (keyword: string) => {
   } catch (err) {
     console.warn("[NavSearch] suggest failed:", err);
   }
-}, 300);
+}, 200);
 
 /** 跳转到搜索页 */
 const submit = (raw: string): void => {
@@ -67,7 +72,7 @@ const onClearHistory = (): void => data.clearSearchHistory();
  * @param name - 名称
  */
 const onPickSuggest = async (
-  kind: "song" | "artist" | "album" | "playlist",
+  kind: "song" | "artist" | "album" | "playlist" | "mv",
   id: number,
   name: string,
 ): Promise<void> => {
@@ -90,6 +95,9 @@ const onPickSuggest = async (
       break;
     case "playlist":
       navigateToPlaylist(String(id), { source: "netease", name });
+      break;
+    case "mv":
+      navigateToMv(String(id), { name });
       break;
   }
 };
@@ -284,6 +292,32 @@ onMounted(() => {
                   <span class="truncate text-sm text-on-surface">{{ playlist.name }}</span>
                   <span v-if="playlist.subtitle" class="truncate text-xs text-on-surface-variant">
                     {{ playlist.subtitle }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-if="suggest.mvs.length > 0" class="flex flex-col gap-1.5">
+              <div class="px-2 flex items-center gap-1.5 text-sm font-medium text-primary">
+                <IconLucideVideo class="size-4" />
+                <span>{{ t("search.tabs.mvs") }}</span>
+              </div>
+              <div
+                v-for="mv in suggest.mvs"
+                :key="mv.id"
+                class="min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-on-surface/5 transition-colors duration-200"
+                @click="onPickSuggest('mv', mv.id, mv.name)"
+              >
+                <SImg
+                  v-if="mv.cover"
+                  :src="mv.cover"
+                  class="size-9 shrink-0 rounded-md object-cover"
+                  decoding="async"
+                />
+                <IconLucideVideo v-else class="size-4 shrink-0 text-on-surface-variant/40" />
+                <div class="flex-1 min-w-0 flex flex-col leading-tight">
+                  <span class="truncate text-sm text-on-surface">{{ mv.name }}</span>
+                  <span v-if="mv.artist" class="truncate text-xs text-on-surface-variant">
+                    {{ mv.artist }}
                   </span>
                 </div>
               </div>

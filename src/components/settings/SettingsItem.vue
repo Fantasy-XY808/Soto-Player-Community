@@ -40,6 +40,11 @@ const isChildrenActive = computed(() => {
   return model.value === true;
 });
 
+/** 子项可见列表：支持子项的 visible 条件过滤 */
+const visibleChildren = computed(() =>
+  (props.item.children ?? []).filter((c) => !c.visible || c.visible()),
+);
+
 const isDisabled = computed(() => props.item.disabled?.() ?? false);
 
 const descriptionText = computed(() =>
@@ -132,6 +137,14 @@ const descriptionText = computed(() =>
           :disabled="isDisabled"
           class="w-full"
         />
+        <SInput
+          v-else-if="item.type === 'text'"
+          v-model="model"
+          :type="item.inputType ?? 'text'"
+          :placeholder="item.placeholderKey ? t(item.placeholderKey) : ''"
+          :disabled="isDisabled"
+          class="w-full"
+        />
         <component
           :is="item.component"
           v-else-if="item.type === 'custom' && item.component"
@@ -141,11 +154,11 @@ const descriptionText = computed(() =>
       </div>
     </div>
     <div
-      v-if="item.children?.length && (!item.hideChildren || isChildrenActive)"
+      v-if="visibleChildren.length && (!item.hideChildren || isChildrenActive)"
       class="mt-2.5 flex flex-col gap-2.5 transition-opacity duration-200"
       :class="isChildrenActive ? '' : 'opacity-50 pointer-events-none'"
     >
-      <SettingsItem v-for="child in item.children" :key="child.key" :item="child" />
+      <SettingsItem v-for="child in visibleChildren" :key="child.key" :item="child" />
     </div>
   </div>
 </template>

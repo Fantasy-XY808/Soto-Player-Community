@@ -12,6 +12,8 @@ import { useHotkeyStore } from "./stores/hotkey";
 import { initPlayer } from "./core/player";
 import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
+import { useVisibilityPause } from "./composables/useVisibilityPause";
+import { runIdle } from "./services/performanceOptimization";
 
 const pinia = createPinia();
 pinia.use(piniaPersistedstate);
@@ -22,10 +24,10 @@ app.use(pinia);
 app.use(router);
 app.use(i18n);
 
-// 初始化主题
 useThemeStore().init();
 
-// 同步语言设置
+useVisibilityPause();
+
 watch(
   () => useSettingsStore().locale,
   (v) => {
@@ -35,14 +37,10 @@ watch(
   { immediate: true },
 );
 
-/** 笔画动画结束 */
 const SPLASH_ANIM_MS = 2050;
 
-// 初始化程序
 router.isReady().then(() => {
-  // 挂载应用
   app.mount("#app");
-  // 笔画播完即淡出
   const remaining = Math.max(0, SPLASH_ANIM_MS - performance.now());
   setTimeout(() => {
     const loading = document.getElementById("app-loading");
@@ -51,11 +49,16 @@ router.isReady().then(() => {
       loading.addEventListener("transitionend", () => loading.remove(), { once: true });
     }
   }, remaining);
-  // 初始化播放器
   initPlayer().catch(console.error);
-  // 初始化快捷键
   useHotkeyStore()
     .init()
     .then(installHotkeyManager)
     .catch((err) => console.error("[hotkey] init failed", err));
+
+  runIdle(() => {
+    if ("scheduler" in window) {
+      console.log("[perf] scheduler API available");
+    }
+    console.log("[perf] idle tasks started");
+  });
 });

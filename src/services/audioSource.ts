@@ -7,8 +7,12 @@ import { usePluginsStore } from "@/stores/plugins";
 import { resolveNeteaseUrl } from "@/apis/song/netease";
 import { resolveQQMusicUrl } from "@/apis/song/qqmusic";
 import { resolveKugouUrl } from "@/apis/song/kugou";
+import { resolveQishuiTrack } from "@/apis/qishui";
 import { ErrorCode } from "@shared/types/errors";
 import { handleError } from "@/utils/errors";
+import { LruCache } from "@/services/lruCache";
+
+const urlCache = new LruCache<string, string>({ capacity: 100, ttl: 5 * 60 * 1000 });
 
 /** 在线平台 source → 插件 source key */
 const PLATFORM_TO_PLUGIN_SOURCE: Record<Platform, string> = {
@@ -25,6 +29,12 @@ const isOnlinePlatform = (source: TrackSource): source is Platform =>
   source === "netease" || source === "qqmusic" || source === "kugou";
 
 /**
+ * 检查给定 source 是否走插件源（汽水音乐等无法原生接入的平台）
+ * @param source - 要检查的 source
+ */
+const isPluginOnlySource = (source: string): boolean => source === "qishui";
+
+/**
  * 派生缓存键
  * netease 把音质档位并入键，使不同音质的同一首歌互不覆盖
  * @param track - 要解析的 track
@@ -39,6 +49,9 @@ const cacheKeyForTrack = (track: Track, songLevel: QualityLevel): string | null 
     return `o:netease:${track.id}:${songLevel}`;
   }
   if (isOnlinePlatform(track.source) && track.id) {
+    return `o:${track.source}:${track.id}:`;
+  }
+  if (isPluginOnlySource(track.source) && track.id) {
     return `o:${track.source}:${track.id}:`;
   }
   return null;
@@ -58,11 +71,18 @@ export const resolveByPlugin = async (
   quality: QualityLevel = "hq",
 ): Promise<OnlineResolveResult> => {
   const fail = (errorCode: ErrorCode): OnlineResolveResult => ({ url: null, errorCode });
+  // 汽水音乐走专用插件解析器（无官方接口可用）
+  if (isPluginOnlySource(track.source)) {
+    const url = await resolveQishuiTrack(track, quality);
+    if (url) return { url };
+    return fail(ErrorCode.NO_PLUGIN_AVAILABLE);
+  }
   if (!isOnlinePlatform(track.source)) return fail(ErrorCode.URL_RESOLVE_FAILED);
   // 插件层不做 VIP clamp：第三方在线 URL 解析源（如 lx-music 类脚本）走自己的鉴权，
   // 不应受网易云官方账号权限限制——否则非 VIP 用户永远拿不到高音质
-  // 注意：本项目不支持 unlock-music 类本地解密（解密 .ncm/.qmc 等加密文件），
-  // 那是另一类工具，工作时机是"下载后本地解密"，与本项目"在线播放实时鉴权"完全不同
+  // 本地加密文件 (.ncm/.qmc/.kgm/.kgma/.kwm/.mflac/.tm/.qmc0~3/.qmcflac/.tkm)
+  // 由 audio-engine 在解码时自动解密（见 native/audio-engine/src/decryptor/），
+  // 本函数仅负责在线平台的 URL 解析，不处理本地加密文件
   const pluginSource = PLATFORM_TO_PLUGIN_SOURCE[track.source];
   if (!pluginSource) return fail(ErrorCode.URL_RESOLVE_FAILED);
   const plugins = usePluginsStore();
@@ -176,7 +196,6 @@ export interface ResolvedTrackSource {
  * @param track - 要解析的 track
  */
 export const resolveTrackSource = async (track: Track): Promise<ResolvedTrackSource | null> => {
-  // 本地文件
   if (track.source === "local") {
     return track.path ? { source: track.path, fromCache: false } : null;
   }
@@ -188,11 +207,23 @@ export const resolveTrackSource = async (track: Track): Promise<ResolvedTrackSou
     const cached = await window.api.cache.song.lookup(cacheKey!);
     if (cached) return { source: cached, fromCache: true };
   }
+  const urlCacheKey = `${track.source}:${track.id}:${songLevel}`;
+  const cachedUrl = urlCache.get(urlCacheKey);
+  if (cachedUrl) {
+    const result: ResolvedTrackSource = { source: cachedUrl, fromCache: false };
+    if (cacheEnabled) {
+      result.cacheRequest = async () => {
+        void window.api.cache.song.fetch(cacheKey, track.source, cachedUrl);
+      };
+    }
+    return result;
+  }
   // 流媒体
   if (track.source === "streaming") {
     try {
       const store = useStreamingStore();
       const streamUrl = await store.getStreamUrl(track);
+      urlCache.set(urlCacheKey, streamUrl);
       const result: ResolvedTrackSource = { source: streamUrl, fromCache: false };
       if (cacheEnabled) {
         // 缓存下载用独立 PlaySessionId
@@ -222,6 +253,7 @@ export const resolveTrackSource = async (track: Track): Promise<ResolvedTrackSou
         return null;
       }
       const url = resolved.url;
+      urlCache.set(urlCacheKey, url);
       const result: ResolvedTrackSource = { source: url, fromCache: false };
       if (cacheEnabled) {
         result.cacheRequest = async () => {
@@ -234,5 +266,58 @@ export const resolveTrackSource = async (track: Track): Promise<ResolvedTrackSou
       return null;
     }
   }
+  // 插件源（汽水音乐等无法原生接入的平台）
+  if (isPluginOnlySource(track.source)) {
+    try {
+      const resolved = await resolveByPlugin(track, songLevel);
+      if (resolved.url === null) {
+        handleError(resolved.errorCode);
+        return null;
+      }
+      const url = resolved.url;
+      urlCache.set(urlCacheKey, url);
+      const result: ResolvedTrackSource = { source: url, fromCache: false };
+      if (cacheEnabled) {
+        result.cacheRequest = async () => {
+          void window.api.cache.song.fetch(cacheKey, track.source, url);
+        };
+      }
+      return result;
+    } catch (err) {
+      handleError(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  }
+  return null;
+};
+
+/**
+ * 确保曲目有可分析的本地缓存路径
+ * - 本地文件直接返回 path
+ * - 流媒体 / 在线 / 插件源：复用 songCache 落盘后返回本地绝对路径
+ *   （Rust 分析器依赖可 seek 的本地源；流媒体 URL 多需鉴权 header，无法直接喂给引擎）
+ * @param track - 曲目
+ * @returns 本地文件绝对路径；缓存未启用或下载失败时返回 null
+ */
+export const ensureLocalCachePath = async (track: Track): Promise<string | null> => {
+  if (track.source === "local") return track.path ?? null;
+  const settings = useSettingsStore();
+  const songLevel = settings.player.songLevel;
+  const cacheKey = cacheKeyForTrack(track, songLevel);
+  // 无 cacheKey 或未启用歌曲缓存：无法本地化
+  if (!cacheKey || settings.system.cache?.songCache?.enabled !== true) return null;
+  // 命中本地缓存直接返回
+  const cached = await window.api.cache.song.lookup(cacheKey);
+  if (cached) return cached;
+  // 未命中：解析 URL 后触发下载
+  const resolved = await resolveTrackSource(track);
+  if (!resolved) return null;
+  if (resolved.fromCache) return resolved.source;
+  if (resolved.cacheRequest) {
+    await resolved.cacheRequest();
+    // 下载完成后再次 lookup 取本地路径
+    return await window.api.cache.song.lookup(cacheKey);
+  }
+  // 走到这里说明缓存未启用但又拿到 URL：流媒体鉴权 URL 无法直接喂给分析器
   return null;
 };

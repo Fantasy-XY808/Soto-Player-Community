@@ -2,7 +2,7 @@
  * 纯音乐热评展示
  *
  * 切歌时拉热评；对所有音源生效（仅网易云有评论 API，其他源拉不到则保持 null）；
- * LRU 缓存最近 50 首的「选中那一条」
+ * LRU 缓存最近 100 首的「选中那一条」
  */
 
 import { computed, shallowRef, watch } from "vue";
@@ -11,6 +11,7 @@ import { fetchSongComments, type NeteaseComment } from "@/apis/comment/netease";
 import { isPureMusic } from "@shared/utils/pureMusicDetect";
 import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
+import { LruCache } from "@/services/lruCache";
 
 /** 评论加载状态 */
 export type CommentLoadStatus = "idle" | "loading" | "loaded" | "failed" | "unsupported";
@@ -24,10 +25,10 @@ export interface SelectedComment {
 }
 
 /** LRU 缓存上限 */
-const CACHE_MAX = 50;
+const CACHE_MAX = 100;
 
-/** songId → 选中热评；Map 按插入序遍历， eldest 在迭代器首位 */
-const cache = new Map<string, SelectedComment>();
+/** songId → 选中热评；get 命中会重排，set 超容量自动淘汰最久未访问 */
+const cache = new LruCache<string, SelectedComment>({ capacity: CACHE_MAX });
 
 /** 当前展示的热评 */
 const activeComment = shallowRef<SelectedComment | null>(null);
@@ -62,21 +63,6 @@ const pickFromComments = (comments: NeteaseComment[]): NeteaseComment | null => 
   return pool[idx] ?? null;
 };
 
-/** LRU 写入：超限时淘汰最老条目 */
-const putCache = (songId: string, value: SelectedComment): void => {
-  if (cache.size >= CACHE_MAX) {
-    const oldest = cache.keys().next().value;
-    if (oldest) cache.delete(oldest);
-  }
-  cache.set(songId, value);
-};
-
-/** LRU 命中：重新插入到末尾，标记为最近使用 */
-const touchCache = (songId: string, value: SelectedComment): void => {
-  cache.delete(songId);
-  cache.set(songId, value);
-};
-
 /**
  * 拉取并挑选一条热评
  * 仅网易云源有评论 API；其他源直接返回 null（保持纯音乐 fallback 文案）
@@ -87,7 +73,6 @@ const touchCache = (songId: string, value: SelectedComment): void => {
 const loadComment = async (songId: string, songTitle: string, token: number): Promise<void> => {
   const cached = cache.get(songId);
   if (cached) {
-    touchCache(songId, cached);
     activeComment.value = cached;
     loadStatus.value = "loaded";
     return;
@@ -109,7 +94,7 @@ const loadComment = async (songId: string, songTitle: string, token: number): Pr
       nickname: picked.user.nickname,
       songTitle,
     };
-    putCache(songId, selected);
+    cache.set(songId, selected);
     activeComment.value = selected;
     loadStatus.value = "loaded";
   } catch (err) {

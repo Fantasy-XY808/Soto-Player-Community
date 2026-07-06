@@ -25,6 +25,7 @@ import IconLucideCloud from "~icons/lucide/cloud";
 import IconLucideRadio from "~icons/lucide/radio";
 import IconLucideVideo from "~icons/lucide/video";
 import IconLucideNewspaper from "~icons/lucide/newspaper";
+import IconLucideWand2 from "~icons/lucide/wand-2";
 import IconLucideUsers from "~icons/lucide/users";
 import IconLucidePlus from "~icons/lucide/plus";
 import IconLucideChevronDown from "~icons/lucide/chevron-down";
@@ -210,6 +211,7 @@ const menuItems = computed<SMenuItem[]>(() => [
   { key: "/radio", label: t("nav.radio"), icon: markRaw(IconLucideRadio) },
   { key: "/mv", label: t("nav.mv"), icon: markRaw(IconLucideVideo) },
   { key: "/events", label: t("nav.events"), icon: markRaw(IconLucideNewspaper) },
+  { key: "/automix", label: t("nav.automix"), icon: markRaw(IconLucideWand2) },
   ...(systemSettings.listenTogether.enabled
     ? ([
         {

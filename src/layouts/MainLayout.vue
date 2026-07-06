@@ -9,6 +9,7 @@ import { queue as queueRef } from "@/stores/queue";
 const route = useRoute();
 const status = useStatusStore();
 const settings = useSettingsStore();
+const media = useMediaStore();
 
 // 接入 orpheus 协议唤起
 useOrpheusProtocol();
@@ -16,7 +17,7 @@ useOrpheusProtocol();
 const { status: listenStatus } = useListenTogether();
 
 /** 有歌曲信息时显示播放栏 */
-const showPlayerBar = computed(() => !!useMediaStore().track);
+const showPlayerBar = computed(() => !!media.track);
 const { isExpanded } = storeToRefs(status);
 const { appearance } = settings;
 
@@ -39,16 +40,46 @@ watch(isExpanded, (expanded) => {
 });
 
 /**
- * 一起听：主机模式下，队列或当前播放索引变化时通知主进程广播给客户端
- * 客户端不在主机角色时调用为 no-op
+ * 一起听：队列或当前播放索引变化时通知主进程。
+ * idle 与 host 角色均推送——idle 期间累积的队列状态会写入 session，
+ * 启动主机后客户端加入时 welcome 才能拿到正确队列。
+ * client 角色不推送：客户端队列由主机下发控制，本地队列可能与主机不同，
+ * 推送会覆盖 session 中主机同步过来的队列快照。
+ * 实际广播仅在 host 角色时由 handlePlayerEvent 触发，idle 为 no-op 仅写入 session。
  */
 watch(
   [() => queueRef.value, () => status.playIndex, () => listenStatus.value.role],
   () => {
-    if (listenStatus.value.role !== "host") return;
+    if (listenStatus.value.role === "client") return;
     window.api.listenTogether.notifyQueueUpdate(queueRef.value as never, status.playIndex);
   },
   { deep: false },
+);
+
+/**
+ * 一起听：角色切换到 host 时主动推送一次当前曲目/状态/位置。
+ *
+ * 解决场景：用户启动主机后不切歌、不暂停、不拖进度——此时不会有 player:load /
+ * stateChanged / seek 事件触发，handlePlayerEvent 不会被调用，session.currentTrack
+ * 一直停留在 idle 期间最后一次推送的状态（若 idle 期间未播放则为 null）。
+ * 客户端连入 welcome 拿不到当前曲目。
+ *
+ * 此处用 status.position 同步进度（渲染端 status store 与主进程 player 都更新，
+ * 之所以用渲染端是因为渲染端 status 持续接收 player:event 推送，比主进程主动拉
+ * getPlayer().getPosition() 更稳妥——后者在引擎未就绪时会抛异常）。
+ */
+watch(
+  () => listenStatus.value.role,
+  (role) => {
+    if (role !== "host") return;
+    const state =
+      status.state === "playing" ? "playing" : status.state === "paused" ? "paused" : "paused";
+    window.api.listenTogether.notifyTrackChange(
+      media.track as never,
+      status.position,
+      state,
+    );
+  },
 );
 
 onBeforeUnmount(() => {
@@ -67,6 +98,24 @@ const routeKey = computed(() => {
   const hasParam = route.matched.some((m) => m.path.includes(":"));
   return hasParam ? route.path : (route.matched[1]?.path ?? route.path);
 });
+
+/**
+ * 需要 keep-alive 缓存的列表页组件名（Vue SFC 自动从文件名推断）
+ * 仅缓存列表页：详情页带路由参数，缓存反而会拿到上次内容
+ */
+const cachedPageNames = [
+  "Home",
+  "Library",
+  "Search",
+  "Favorites",
+  "History",
+  "Liked",
+  "Cloud",
+  "Daily",
+  "Radio",
+  "MvBrowse",
+  "Events",
+];
 
 /** 侧边栏样式 */
 const sidebarClass = computed(() => {
@@ -137,7 +186,9 @@ const playerBarInnerClass = computed(() => {
       <main class="flex-1 overflow-y-auto overflow-x-hidden">
         <RouterView v-slot="{ Component }">
           <Transition :name="routeTransitionName" mode="out-in">
-            <component :is="Component" :key="routeKey" />
+            <keep-alive :max="10" :include="cachedPageNames">
+              <component :is="Component" :key="routeKey" />
+            </keep-alive>
           </Transition>
         </RouterView>
       </main>

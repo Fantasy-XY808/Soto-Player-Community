@@ -1,8 +1,8 @@
 <div align="center">
 
-<img alt="Soto-Player Community logo" width="120" height="120" src="public/icons/favicon.png" />
+<img alt="Soto Player-Community logo" width="120" height="120" src="public/icons/favicon.png" />
 
-<h2>Soto-Player Community</h2>
+<h2>Soto Player-Community</h2>
 
 <p>🎵 A modern cross-platform desktop music player — a community-driven fork of SPlayer-Next with enhanced visuals and UX.</p>
 
@@ -87,11 +87,17 @@ pnpm format           # Prettier
 pnpm build:native     # Build the Rust native modules only (add `--dev` for debug)
 ```
 
+## Community
+
+- **QQ Group**: [1043061896](https://qm.qq.com/q/1043061896) — feedback, feature requests, casual chat
+- **GitHub Issues**: [Fantasy-XY808/Soto-Player-Community/issues](https://github.com/Fantasy-XY808/Soto-Player-Community/issues)
+
 ## Acknowledgements
 
 This project is a fork of [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) by imsyy. Special thanks to the upstream project and its author.
 
 - [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) — upstream project, modern desktop music player
+- [EasyTier](https://github.com/EasyTier/EasyTier) — Listen Together P2P networking engine
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) — Apple Music-style lyrics display component library
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) — NetEase Cloud Music API (backup + enhanced)
 

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="referrer" content="no-referrer" />
-    <title>Soto-Player Community</title>
+    <title>Soto Player-Community</title>
     <style>
       @font-face {
         font-family: "logo";
@@ -52,6 +52,7 @@
         align-items: center;
         gap: 18px;
         transform: translateZ(0);
+        user-select: none;
       }
       .splash-logo {
         width: 72px;
@@ -69,9 +70,12 @@
       .splash-name {
         font-family: "logo", sans-serif;
         font-size: 34px;
+        font-weight: bold;
         line-height: 1;
         will-change: transform, opacity;
         animation: splash-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+        -webkit-user-select: none;
+        user-select: none;
       }
       .splash-suffix {
         font-family: "logo", sans-serif;
@@ -92,6 +96,8 @@
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei",
           sans-serif;
         animation: splash-rise-footer 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both;
+        -webkit-user-select: none;
+        user-select: none;
       }
       @keyframes splash-rise {
         from {
@@ -142,13 +148,12 @@
   <body>
     <div id="app-loading">
       <div class="splash">
-        <img src="/icons/logo.svg" alt="Soto-Player Community" class="splash-logo" />
+        <img src="/icons/logo-icon.png" alt="Soto Player-Community" class="splash-logo" />
         <div class="splash-brand">
-          <span class="splash-name">Soto Player</span>
-          <span class="splash-suffix">Community</span>
+          <span class="splash-name">Soto Player-Community</span>
         </div>
       </div>
-      <div class="splash-footer">Soto-Player Community · 水芸音乐播放器 · © 2026 Soto</div>
+      <div class="splash-footer">Soto Player-Community · 水芸音乐播放器 · v%VITE_APP_VERSION%</div>
     </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>

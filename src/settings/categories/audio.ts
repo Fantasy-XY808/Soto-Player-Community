@@ -1,6 +1,12 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
 import EqualizerControl from "@/components/settings/custom/EqualizerControl.vue";
+import SuperResParamsControl from "@/components/settings/custom/SuperResParamsControl.vue";
+import BassEnhancerControl from "@/components/settings/custom/BassEnhancerControl.vue";
+import StereoWidenerControl from "@/components/settings/custom/StereoWidenerControl.vue";
+import LoudnessNormalizerControl from "@/components/settings/custom/LoudnessNormalizerControl.vue";
+import NeuralUpsampleControl from "@/components/settings/custom/NeuralUpsampleControl.vue";
+import SpatialAudioControl from "@/components/settings/custom/SpatialAudioControl.vue";
 import IconLucideAudioWaveform from "~icons/lucide/audio-waveform";
 
 const audioCategory: SettingCategory = {
@@ -60,28 +66,43 @@ const audioCategory: SettingCategory = {
           component: EqualizerControl,
           fullWidth: true,
         },
-      ],
-    },
-    {
-      id: "audioSuperRes",
-      items: [
         {
-          key: "audioSuperResolutionEnabled",
-          type: "switch",
-          binding: { store: "settings", path: "system.player.audioSuperResolution.enabled" },
-          defaultValue: false,
+          key: "audioSuperResolution",
+          type: "custom",
+          component: SuperResParamsControl,
+          fullWidth: true,
+        },
+        {
+          key: "bassEnhancer",
+          type: "custom",
+          component: BassEnhancerControl,
+          fullWidth: true,
+        },
+        {
+          key: "stereoWidener",
+          type: "custom",
+          component: StereoWidenerControl,
+          fullWidth: true,
+        },
+        {
+          key: "loudnessNormalizer",
+          type: "custom",
+          component: LoudnessNormalizerControl,
+          fullWidth: true,
+        },
+        {
+          key: "neuralUpsample",
+          type: "custom",
+          component: NeuralUpsampleControl,
+          fullWidth: true,
           tag: { text: "Beta" },
         },
         {
-          key: "audioSuperResolutionBackend",
-          type: "select",
-          binding: { store: "settings", path: "system.player.audioSuperResolution.backend" },
-          defaultValue: 0,
-          options: [
-            { value: 0, labelKey: "settings.audioSuperResolutionBackend.cpu" },
-            { value: 1, labelKey: "settings.audioSuperResolutionBackend.gpu" },
-            { value: 2, labelKey: "settings.audioSuperResolutionBackend.npu" },
-          ],
+          key: "spatialAudio",
+          type: "custom",
+          component: SpatialAudioControl,
+          fullWidth: true,
+          tag: { text: "Beta" },
         },
       ],
     },

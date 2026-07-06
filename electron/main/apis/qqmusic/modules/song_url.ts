@@ -2,10 +2,11 @@
  * 获取 QQ 音乐播放 URL（vkey 接口）
  *
  * 协议：u.y.qq.com/cgi-bin/musicu.fcg → music.vkey.GetVkeyServer / CgiGetVkey
- * 匿名态可拿 128k mp3；VIP 高品质需要 cookie，本项目不接入登录态故仅给 128k
+ * 匿名态可拿 128k mp3；登录态（withCredentials=true）按 F000 flac → M800 320k 顺序尝试 VIP 高品质
  *
  * params:
- * - mid  songmid（必填），例如 "001qvvgF38HVc4"
+ * - mid              songmid（必填），例如 "001qvvgF38HVc4"
+ * - withCredentials  true 时优先用 cookie 拿 VIP URL，失败回落匿名候选
  *
  * 返回：
  * - code 200 + url：可播放的 http(s) 链接
@@ -26,26 +27,39 @@ interface VkeyResp {
   sip?: string[];
 }
 
+interface Candidate {
+  filename: string;
+  /** 是否带 cookie 调用；带 cookie 的候选排在前 */
+  withCredentials: boolean;
+}
+
 /**
  * 尝试单个 filename 模板拿 purl
  *
- * @param mid        songmid
- * @param filename   形如 M500${mid}.mp3，前缀决定码率：M500=128k mp3 / M800=320k mp3 / C600=128k m4a
+ * @param mid             songmid
+ * @param filename        形如 M500${mid}.mp3，前缀决定码率与格式
+ * @param withCredentials true 时带 cookie 调用，用于 VIP 接口鉴权
  * @returns purl（空字符串表示服务端拒绝或无权限）
  */
 const fetchPurl = async (
   mid: string,
   filename: string,
+  withCredentials: boolean,
 ): Promise<{ purl: string; sip?: string }> => {
-  const data = await qmRequest<VkeyResp>("music.vkey.GetVkeyServer", "CgiGetVkey", {
-    guid: "1008610010",
-    songmid: [mid],
-    songtype: [0],
-    uin: "0",
-    loginflag: 1,
-    platform: "20",
-    filename: [filename],
-  });
+  const data = await qmRequest<VkeyResp>(
+    "music.vkey.GetVkeyServer",
+    "CgiGetVkey",
+    {
+      guid: "1008610010",
+      songmid: [mid],
+      songtype: [0],
+      uin: "0",
+      loginflag: 1,
+      platform: "20",
+      filename: [filename],
+    },
+    withCredentials,
+  );
   return {
     purl: data?.midurlinfo?.[0]?.purl ?? "",
     sip: data?.sip?.[0],
@@ -55,14 +69,25 @@ const fetchPurl = async (
 const song_url: QMModule = async (params) => {
   const mid = String(params.mid ?? "").trim();
   if (!mid) return { code: 400, url: "", message: "mid required" };
+  const withCredentials = params.withCredentials === true;
 
-  // filename 前缀决定码率/格式，部分曲目 VIP 限制下 M500 拿不到 purl 但 C600（m4a）仍可
-  // 顺序：M500（128k mp3，命中率最高）→ C600（128k m4a，版权宽松）→ M800（320k mp3，VIP 兜底）
-  const candidates = [`M500${mid}.mp3`, `C600${mid}.m4a`, `M800${mid}.mp3`];
+  // filename 前缀决定码率/格式：
+  // F000 = flac（VIP），M800 = 320k mp3（VIP），M500 = 128k mp3（匿名），C600 = 128k m4a（匿名，版权宽松）
+  const vipCandidates: Candidate[] = [
+    { filename: `F000${mid}.flac`, withCredentials: true },
+    { filename: `M800${mid}.mp3`, withCredentials: true },
+  ];
+  const anonCandidates: Candidate[] = [
+    { filename: `M500${mid}.mp3`, withCredentials: false },
+    { filename: `C600${mid}.m4a`, withCredentials: false },
+  ];
+  // VIP 用户：先试高品质候选（带 cookie），失败回落匿名候选
+  // 匿名用户：只试匿名候选
+  const candidates = withCredentials ? [...vipCandidates, ...anonCandidates] : anonCandidates;
 
-  for (const filename of candidates) {
+  for (const { filename, withCredentials: useCred } of candidates) {
     try {
-      const { purl, sip } = await fetchPurl(mid, filename);
+      const { purl, sip } = await fetchPurl(mid, filename, useCred);
       if (purl) {
         const host = sip ?? "https://ws.stream.qqmusic.qq.com/";
         const url = `${host}${purl}`;

@@ -60,6 +60,8 @@ export interface TopArtist {
   playCount: number;
   /** 累计收听毫秒 */
   listenedMs: number;
+  /** 艺人头像 URL（cover:// 协议；来自 musicbrainz 缓存或 track 自带 picUrl） */
+  avatar?: string;
 }
 
 /** 单个小时段（0-23）的播放次数 */

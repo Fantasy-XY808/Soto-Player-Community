@@ -165,7 +165,7 @@ pub struct PlayModeParam {
 #[napi(string_enum)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscordDisplayMode {
-    /// Listening to SPlayer
+    /// Listening to Soto Player
     Name,
     /// Listening to {artist}
     State,

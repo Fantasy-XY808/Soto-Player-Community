@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores/user";
+import { useQqUserStore } from "@/stores/qqUser";
+import { useKugouUserStore } from "@/stores/kugouUser";
 import { dialog } from "@/composables/useDialog";
 import { toast } from "@/composables/useToast";
 import vipImg from "@/assets/images/vip.png";
@@ -8,19 +10,36 @@ import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideUserRound from "~icons/lucide/user-round";
 import IconLucideUserPlus from "~icons/lucide/user-plus";
 
+type AddonPlatform = "qqmusic" | "kugou" | "qishui";
+type CookiePlatform = "netease" | "qqmusic" | "kugou";
+
 const { t } = useI18n();
 const router = useRouter();
 const user = useUserStore();
+const qqUser = useQqUserStore();
+const kugouUser = useKugouUserStore();
 
-const loginOpen = ref(false);
+const loginOpen = computed({
+  get: () => user.loginDialogOpen,
+  set: (v: boolean) => {
+    user.loginDialogOpen = v;
+  },
+});
 const popoverOpen = ref(false);
 const addAccountOpen = ref(false);
+
+/** 通用 cookie 登录弹窗状态 */
+const cookieDialogOpen = ref(false);
+const cookiePlatform = ref<CookiePlatform>("qqmusic");
 
 /** 启动时校验登录态（cookie 仍有效就刷新 profile） */
 onMounted(() => {
   if (user.profile) {
     user.fetchStatus().catch(() => undefined);
   }
+  // 附加账户：有缓存 profile 就异步刷新，没缓存也尝试一次（cookie 可能仍在主进程）
+  qqUser.fetchStatus().catch(() => undefined);
+  kugouUser.fetchStatus().catch(() => undefined);
 });
 
 const isVip = computed(() => !!user.profile?.vipType && user.profile.vipType !== 0);
@@ -45,19 +64,19 @@ const stats = computed(() => [
     key: "artist" as const,
     label: t("artist.label"),
     icon: markRaw(IconLucideUserRound),
-    value: user.subcount.artistCount ?? user.artists.length,
+    value: user.subcount.artistCount || user.artists.length,
   },
 ]);
 
 /** 可添加的附加账户平台（网易云为主账户，已在登录对话框处理） */
-const addonPlatforms = [
-  { key: "qqmusic" as const, label: t("login.platformQQMusic") },
-  { key: "kugou" as const, label: t("login.platformKugou") },
-  { key: "qishui" as const, label: t("login.platformQishui") },
+const addonPlatforms: { key: AddonPlatform; label: string }[] = [
+  { key: "qqmusic", label: t("login.platformQQMusic") },
+  { key: "kugou", label: t("login.platformKugou") },
+  { key: "qishui", label: t("login.platformQishui") },
 ];
 
 const onTriggerClick = (): void => {
-  if (!user.isLoggedIn) loginOpen.value = true;
+  if (!user.isLoggedIn) user.openLoginDialog();
 };
 
 const handleStatClick = (key: "playlist" | "album" | "artist"): void => {
@@ -77,15 +96,26 @@ const handleLogout = async (): Promise<void> => {
   toast.success(t("login.logoutDone"));
 };
 
-/** 点击附加平台登录按钮——后端登录实现尚在开发中 */
-const handleAddonLogin = (platform: "qqmusic" | "kugou" | "qishui"): void => {
-  toast.info(
-    t("login.platformComingSoon", {
-      platform: t(`login.platform${platform.charAt(0).toUpperCase()}${platform.slice(1)}`),
-    }),
-  );
+/**
+ * 点击附加平台登录按钮
+ * - qqmusic / kugou：打开 cookie 登录弹窗
+ * - qishui：弹提示，引导用户去插件目录安装第三方插件
+ */
+const handleAddonLogin = (platform: AddonPlatform): void => {
   addAccountOpen.value = false;
   popoverOpen.value = false;
+  if (platform === "qqmusic" || platform === "kugou") {
+    cookiePlatform.value = platform;
+    cookieDialogOpen.value = true;
+    return;
+  }
+  toast.info(t("login.qishuiPluginHint"));
+};
+
+/** cookie 登录成功后刷新对应 store */
+const onCookieSuccess = (platform: CookiePlatform): void => {
+  if (platform === "qqmusic") qqUser.fetchStatus().catch(() => undefined);
+  else if (platform === "kugou") kugouUser.fetchStatus().catch(() => undefined);
 };
 </script>
 
@@ -212,4 +242,10 @@ const handleAddonLogin = (platform: "qqmusic" | "kugou" | "qishui"): void => {
   </SButton>
 
   <LoginDialog v-model:open="loginOpen" />
+
+  <LoginCookieDialog
+    v-model:open="cookieDialogOpen"
+    :platform="cookiePlatform"
+    @success="onCookieSuccess"
+  />
 </template>

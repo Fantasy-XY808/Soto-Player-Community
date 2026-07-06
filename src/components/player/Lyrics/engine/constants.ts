@@ -48,7 +48,7 @@ export const DEFAULTS = {
   /** 扇形模式单侧可见行数 */
   fanMaxVisibleLines: 7,
   /** 扇形模式固定行高（px） */
-  fanLineHeight: 96,
+  fanLineHeight: 56,
   /** 扇形模式最远行缩放 */
   fanMinScale: 0.78,
   /** 扇形模式最远行透明度 */
@@ -57,6 +57,8 @@ export const DEFAULTS = {
   fanMaxBlur: 7,
   /** 扇形模式是否启用底框背景 */
   fanEnableBackground: true,
+  /** 扇形模式激活行是否始终显示底框（依赖 fanEnableBackground） */
+  fanAlwaysShowActiveBg: false,
   /** 扇形模式是否启用长音节光辉 */
   fanEnableGlow: true,
 };
@@ -115,6 +117,8 @@ export interface RendererConfig {
   fanMaxBlur: number;
   /** 扇形模式是否启用底框背景（默认 true） */
   fanEnableBackground: boolean;
+  /** 扇形模式激活行是否始终显示底框（依赖 fanEnableBackground，默认 false） */
+  fanAlwaysShowActiveBg: boolean;
   /** 扇形模式是否启用长音节光辉（默认 true） */
   fanEnableGlow: boolean;
   /** 鼠标滚轮方向：natural=内容随手势同向（Mac），reverse=内容随手势反向（Windows） */

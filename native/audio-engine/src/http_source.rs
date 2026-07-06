@@ -14,6 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{anyhow, Context, Result};
+use parking_lot::Mutex;
 use tracing::{debug, warn};
 
 const USER_AGENT: &str = "SPlayer-Next/1.0";
@@ -132,14 +133,34 @@ pub struct HttpRangeSource {
     config: Config,
 }
 
+/// 全局代理 URL（None=直连）。在 build_agent 构造 ureq::Agent 时读取，
+/// 由 NAPI 侧 `AudioPlayer::set_proxy` 写入；对设置后新创建的 HttpRangeSource 立即生效
+static GLOBAL_PROXY: Mutex<Option<String>> = Mutex::new(None);
+
+/// 设置全局代理 URL，后续 build_agent 创建的 Agent 都会走此代理
+/// 传入 None 关闭代理；URL 格式如 `http://host:port` / `socks5://user:pass@host:port`
+pub fn set_global_proxy(url: Option<String>) {
+    *GLOBAL_PROXY.lock() = url;
+}
+
 /// 按指定 connect 超时构建 agent；read/write 超时统一取自 config
 fn build_agent(connect_timeout: Duration, config: &Config) -> ureq::Agent {
-    ureq::AgentBuilder::new()
+    let mut builder = ureq::AgentBuilder::new()
         .user_agent(USER_AGENT)
         .timeout_connect(connect_timeout)
         .timeout_read(config.socket_read_timeout)
-        .timeout_write(config.socket_read_timeout)
-        .build()
+        .timeout_write(config.socket_read_timeout);
+
+    // 克隆后立即释放锁，避免 ureq::Proxy 解析期间持锁
+    let proxy_url = GLOBAL_PROXY.lock().clone();
+    if let Some(url) = proxy_url {
+        match ureq::Proxy::new(&url) {
+            Ok(proxy) => builder = builder.proxy(proxy),
+            Err(e) => warn!(proxy = %url, error = %e, "代理 URL 解析失败，回退直连"),
+        }
+    }
+
+    builder.build()
 }
 
 impl HttpRangeSource {

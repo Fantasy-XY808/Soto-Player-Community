@@ -3,6 +3,7 @@ import { LOCALES } from "@shared/types/settings";
 import StorageManager from "@/components/settings/custom/StorageManager.vue";
 import MigrationPanel from "@/components/settings/custom/MigrationPanel.vue";
 import { useUpdateStore } from "@/stores/update";
+import { useSettingsStore } from "@/stores/settings";
 import IconLucideCog from "~icons/lucide/cog";
 
 const generalCategory: SettingCategory = {
@@ -41,6 +42,59 @@ const generalCategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "system.system.registerOrpheusProtocol" },
           defaultValue: false,
+        },
+        {
+          key: "preventSleep",
+          type: "switch",
+          binding: { store: "settings", path: "system.system.preventSleep" },
+          defaultValue: false,
+        },
+      ],
+    },
+    {
+      id: "proxy",
+      items: [
+        {
+          key: "proxyProtocol",
+          type: "select",
+          binding: { store: "settings", path: "system.system.proxy.protocol" },
+          options: [
+            { value: "off", labelKey: "settings.proxyProtocol.protocol.off" },
+            { value: "http", labelKey: "settings.proxyProtocol.protocol.http" },
+            { value: "https", labelKey: "settings.proxyProtocol.protocol.https" },
+            { value: "socks", labelKey: "settings.proxyProtocol.protocol.socks5" },
+          ],
+          defaultValue: "off",
+          childrenCondition: () => useSettingsStore().system.system.proxy.protocol !== "off",
+          children: [
+            {
+              key: "proxyHost",
+              type: "text",
+              binding: { store: "settings", path: "system.system.proxy.host" },
+              defaultValue: "",
+            },
+            {
+              key: "proxyPort",
+              type: "number",
+              binding: { store: "settings", path: "system.system.proxy.port" },
+              min: 1,
+              max: 65535,
+              defaultValue: 7890,
+            },
+            {
+              key: "proxyUsername",
+              type: "text",
+              binding: { store: "settings", path: "system.system.proxy.username" },
+              defaultValue: "",
+            },
+            {
+              key: "proxyPassword",
+              type: "text",
+              inputType: "password",
+              binding: { store: "settings", path: "system.system.proxy.password" },
+              defaultValue: "",
+            },
+          ],
         },
       ],
     },

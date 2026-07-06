@@ -13,7 +13,7 @@ import { ltLog } from "@main/utils/logger";
 import type { ListenTogetherDiscoveredSession } from "@shared/types/settings";
 
 /** 服务类型（不含协议后缀） */
-const SERVICE_TYPE = "splayer";
+const SERVICE_TYPE = "soto-player";
 
 /** 发现到的会话条目（UI 列表用） */
 export type DiscoveredSession = ListenTogetherDiscoveredSession;
@@ -52,6 +52,14 @@ const notifyDiscovery = (): void => {
 
 /**
  * 发布主机服务
+ *
+ * 此前同步调用 publishedService.stop() 后立即 publish，旧服务可能未真正注销，
+ * 新服务可能因名称冲突而上线失败（bonjour-service 内部异步）。
+ * 改为返回 Promise，stop 完成后才 publish；调用方 await 即可避免竞态。
+ *
+ * 超时兜底：publishedService.stop(callback) 的回调由 bonjour-service 内部触发，
+ * 极端情况下（socket 异常 / 库 bug）callback 可能永不触发，导致 Promise 永久 hang，
+ * 调用方 startHost 会卡死。加 1s 超时强制 resolve。
  * @param name - 主机显示名
  * @param port - 监听端口
  * @param level - 主机级别
@@ -62,27 +70,60 @@ export const publishService = (
   port: number,
   level: "default" | "vip",
   hasPassword: boolean,
-): void => {
-  if (publishedService) {
-    try {
-      publishedService.stop();
-    } catch {
-      // ignore
+): Promise<void> => {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      resolve();
+    };
+    // 1s 超时兜底：bonjour-service stop callback 永不触发时强制推进
+    const timer = setTimeout(() => {
+      if (!done) {
+        ltLog.warn("mDNS 旧服务停止超时，强制推进 publish");
+        publishedService = null;
+        doPublish();
+      }
+    }, 1000);
+
+    if (publishedService) {
+      try {
+        publishedService.stop(() => {
+          if (done) return;
+          publishedService = null;
+          doPublish();
+        });
+        return;
+      } catch (err) {
+        ltLog.warn("停止旧 mDNS 服务异常:", err);
+        publishedService = null;
+      }
     }
-    publishedService = null;
-  }
-  const inst = getBonjour();
-  publishedService = inst.publish({
-    name,
-    type: SERVICE_TYPE,
-    protocol: "tcp",
-    port,
-    txt: {
-      level,
-      hasPassword: hasPassword ? "1" : "0",
-    },
+    doPublish();
+
+    function doPublish(): void {
+      try {
+        const inst = getBonjour();
+        publishedService = inst.publish({
+          name,
+          type: SERVICE_TYPE,
+          protocol: "tcp",
+          port,
+          txt: {
+            level,
+            hasPassword: hasPassword ? "1" : "0",
+          },
+        });
+        ltLog.info(`已发布 mDNS 服务: ${name} :${port} (${level})`);
+      } catch (err) {
+        ltLog.error("发布 mDNS 服务失败:", err);
+      } finally {
+        finish();
+      }
+    }
   });
-  ltLog.info(`已发布 mDNS 服务: ${name} :${port} (${level})`);
 };
 
 /** 取消发布主机服务 */
@@ -119,26 +160,52 @@ const toDiscovered = (service: Service): DiscoveredSession | null => {
 
 /**
  * 开始浏览局域网内的会话
+ *
+ * browser.on("up")/("down") 此前未包裹 try/catch：bonjour-service 在某些异常
+ * 网络环境下会 emit 异常 service 对象（字段缺失），导致回调抛错后 browser 直接挂掉。
+ * 包裹后单个异常不再影响整体浏览，仅记录日志。
  * @param onUpdate - 每次列表变化时回调
  */
 export const browseServices = (onUpdate?: DiscoveryCallback): void => {
-  if (browser) return;
   if (onUpdate) discoveryCallbacks.add(onUpdate);
-  const inst = getBonjour();
-  browser = inst.find({ type: SERVICE_TYPE, protocol: "tcp" });
-  browser.on("up", (service: Service) => {
-    const entry = toDiscovered(service);
-    if (!entry) return;
-    const key = `${entry.host}:${entry.port}`;
-    discoveredSessions.set(key, entry);
+  // 已有 browser：仅追加回调，不重复创建
+  if (browser) {
     notifyDiscovery();
-    ltLog.info(`发现会话: ${entry.name} (${key})`);
+    return;
+  }
+  // inst.find 抛错时（socket 已被占用 / 权限不足等）需捕获，避免 IPC 层
+  // addDiscoverySender 抛错导致 event.sender.once("destroyed", ...) 永不注册，
+  // 进而 discoverySenders 中残留已 destroyed 的 WebContents、browser 永不停止
+  try {
+    const inst = getBonjour();
+    browser = inst.find({ type: SERVICE_TYPE, protocol: "tcp" });
+  } catch (err) {
+    ltLog.error("启动 mDNS 浏览失败:", err);
+    browser = null;
+    notifyDiscovery();
+    return;
+  }
+  browser.on("up", (service: Service) => {
+    try {
+      const entry = toDiscovered(service);
+      if (!entry) return;
+      const key = `${entry.host}:${entry.port}`;
+      discoveredSessions.set(key, entry);
+      notifyDiscovery();
+      ltLog.info(`发现会话: ${entry.name} (${key})`);
+    } catch (err) {
+      ltLog.warn("处理 mDNS up 事件异常:", err);
+    }
   });
   browser.on("down", (service: Service) => {
-    const host = service.addresses?.find((a) => !a.includes(":")) ?? service.host;
-    if (!host) return;
-    const key = `${host}:${service.port}`;
-    if (discoveredSessions.delete(key)) notifyDiscovery();
+    try {
+      const host = service.addresses?.find((a) => !a.includes(":")) ?? service.host;
+      if (!host) return;
+      const key = `${host}:${service.port}`;
+      if (discoveredSessions.delete(key)) notifyDiscovery();
+    } catch (err) {
+      ltLog.warn("处理 mDNS down 事件异常:", err);
+    }
   });
   // 立即投递一次当前快照
   notifyDiscovery();
@@ -146,19 +213,23 @@ export const browseServices = (onUpdate?: DiscoveryCallback): void => {
 
 /**
  * 取消浏览
+ *
+ * 引用计数：仅当 discoveryCallbacks 为空（最后一个订阅者退出）时才真正停止 browser。
+ * 此前只要任意一个调用方 stopBrowse 就无条件 browser.stop()，导致多窗口场景下
+ * 一个窗口关闭后另一个窗口的发现列表也停止刷新。
  * @param onUpdate - 之前注册的回调
  */
 export const stopBrowse = (onUpdate?: DiscoveryCallback): void => {
   if (onUpdate) discoveryCallbacks.delete(onUpdate);
-  if (browser) {
-    try {
-      browser.stop();
-    } catch {
-      // ignore
-    }
-    browser = null;
-  }
   if (discoveryCallbacks.size === 0) {
+    if (browser) {
+      try {
+        browser.stop();
+      } catch {
+        // ignore
+      }
+      browser = null;
+    }
     discoveredSessions.clear();
   }
 };

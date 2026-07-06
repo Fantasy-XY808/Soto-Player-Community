@@ -7,7 +7,7 @@
  * - 协议版本号固化在 hello 中，便于后续升级时的兼容判定
  */
 
-import type { ListenTogetherQueueMode } from "@shared/types/settings";
+import type { ListenTogetherPermissions, ListenTogetherQueueMode } from "@shared/types/settings";
 
 /** 协议版本 */
 export const PROTOCOL_VERSION = 1;
@@ -67,6 +67,8 @@ export interface ServerWelcomeMessage {
   currentState: "playing" | "paused";
   /** 队列快照（按 queueMode 切片） */
   queue: SyncQueueSnapshot | null;
+  /** 主机下发的房客权限（客户端据此禁用对应操作） */
+  permissions: ListenTogetherPermissions;
   /** 主机发消息时的墙钟时间，用于时钟同步 */
   serverTime: number;
 }
@@ -114,6 +116,13 @@ export interface PositionSyncMessage {
   serverTime: number;
 }
 
+/** 主机 → 客户端：成员列表同步（含自己在内的所有房客） */
+export interface MembersSyncMessage {
+  type: "membersSync";
+  /** 当前已握手成员（含延迟、级别） */
+  members: { id: string; name: string; level: UserLevel; latency: number }[];
+}
+
 /** 任一方向：心跳请求 */
 export interface PingMessage {
   type: "ping";
@@ -126,6 +135,14 @@ export interface PongMessage {
   type: "pong";
   /** 对应 ping 的 t */
   t: number;
+}
+
+/** 客户端 → 主机：回传测量好的单向延迟（RTT/2）
+ *  主机端不再用 Date.now() - msg.t 估算，避免时钟不同步导致 0ms 或负值 */
+export interface PongBackMessage {
+  type: "pongBack";
+  /** 客户端算好的单向延迟（毫秒，RTT/2） */
+  latency: number;
 }
 
 /** 任一方向：断开通知（礼貌关闭前发送） */
@@ -145,8 +162,10 @@ export type Message =
   | SeekMessage
   | QueueUpdateMessage
   | PositionSyncMessage
+  | MembersSyncMessage
   | PingMessage
   | PongMessage
+  | PongBackMessage
   | ByeMessage;
 
 /**
@@ -187,15 +206,25 @@ export const sliceQueue = (
   mode: ListenTogetherQueueMode,
 ): SyncQueueSnapshot => {
   if (mode === "currentOnly") {
+    // 越界时返回空切片 + currentIndex:-1，与 session.ts setCurrentIndex/setClientQueue 语义对齐
+    // （此前越界返回 currentIndex:0 但 tracks:[]，状态层 setClientQueue 会归一为 -1，
+    //   协议层与状态层语义不一致；自描述性差）
+    if (currentIndex < 0 || currentIndex >= tracks.length) {
+      return { tracks: [], currentIndex: -1 };
+    }
     return {
-      tracks: currentIndex >= 0 && currentIndex < tracks.length ? [tracks[currentIndex]!] : [],
+      tracks: [tracks[currentIndex]!],
       currentIndex: 0,
     };
   }
   if (mode === "currentAndNext") {
-    const start = Math.max(0, currentIndex);
-    const slice = tracks.slice(start, start + 2);
+    // currentIndex 越界（-1 或 >= tracks.length）时返回空切片，避免误返回第一首
+    if (currentIndex < 0 || currentIndex >= tracks.length) {
+      return { tracks: [], currentIndex: -1 };
+    }
+    const slice = tracks.slice(currentIndex, currentIndex + 2);
     return { tracks: slice, currentIndex: 0 };
   }
+  // fullQueue 模式：保留原始索引（含 -1）
   return { tracks: [...tracks], currentIndex };
 };

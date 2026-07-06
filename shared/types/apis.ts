@@ -29,6 +29,14 @@ export interface ApisApi {
    */
   clearSession: (platform: ApiPlatform) => Promise<void>;
   /**
+   * 按接口名清除指定平台内存缓存
+   *
+   * 用于发送 / 删除评论后让 comment_music 等接口的 2 分钟缓存立即失效
+   * @param platform 音源平台
+   * @param name 接口名（如 "comment_music"）
+   */
+  invalidateCache: (platform: ApiPlatform, name: string) => Promise<void>;
+  /**
    * 打开官方网页登录
    * @param platform 音源平台
    * @returns 登录成功 `{ ok: true }`；用户取消 / 失败 `{ ok: false, error }`

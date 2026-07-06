@@ -15,6 +15,8 @@ interface DragOptions {
   enabled: () => boolean;
   /** 点击（未拖拽）时回调 */
   onClick: () => void;
+  /** 拖拽过程中持续回调（dx, dy 相对按下起点的累计位移，仅超过阈值后触发） */
+  onDragMove?: (dx: number, dy: number) => void;
 }
 
 export const useDragWindow = (
@@ -45,6 +47,9 @@ export const useDragWindow = (
     const dy = event.screenY - dragStartY;
     if (!hasMoved && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
       hasMoved = true;
+    }
+    if (hasMoved && options.onDragMove) {
+      options.onDragMove(dx, dy);
     }
     pendingX = Math.round(event.screenX - dragOffsetX);
     pendingY = Math.round(event.screenY - dragOffsetY);

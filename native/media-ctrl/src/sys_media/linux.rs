@@ -255,7 +255,7 @@ async fn run_mpris_loop(mut rx: UnboundedReceiver<MprisCommand>) -> Result<()> {
         .minimum_rate(0.2)
         .maximum_rate(2.0)
         .playback_status(MprisPlaybackStatus::Stopped)
-        .identity("Soto-Player Community")
+        .identity("Soto Player-Community")
         .desktop_entry("top.fantasy-xy808.soto_player_community")
         .build()
         .await

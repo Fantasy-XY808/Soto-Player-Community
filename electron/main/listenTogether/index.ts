@@ -43,6 +43,7 @@ import {
   type DiscoveredSession,
 } from "./discovery";
 import type { UserLevel } from "./protocol";
+import { getEasyTierStatus, type EasyTierStatus, generateShareCode } from "./easytier";
 
 export {
   startHost,
@@ -75,13 +76,18 @@ export {
   stopBrowse,
   getDiscoveredSessions,
   destroyDiscovery,
+  getEasyTierStatus,
+  generateShareCode,
 };
-export type { LocalUserInfo, DiscoveredSession, UserLevel, ListenTogetherStatus };
+export type { LocalUserInfo, DiscoveredSession, UserLevel, ListenTogetherStatus, EasyTierStatus };
 
 /**
  * 主机端：player 状态变化钩子统一入口
  *
- * 由主进程 player.ts 在状态变化时调用，本函数根据当前角色决定是否广播。
+ * 由主进程 player.ts 在状态变化时调用。
+ * 始终更新 session 中的主机状态（track/queue/state/seek），即使在 idle 期间
+ * 也能累积播放器事件，避免用户先播放后启动主机导致状态丢失；
+ * 仅在角色为 host 时才向客户端广播。
  * @param kind - 事件类型
  * @param payload - 事件负载
  */
@@ -95,29 +101,31 @@ export const handlePlayerEvent = (
     currentIndex?: number;
   },
 ): void => {
-  if (getRole() !== "host") return;
+  const isHost = getRole() === "host";
   switch (kind) {
     case "trackChange":
       onHostTrackChange(payload.track ?? null, payload.position ?? 0, payload.state ?? "idle");
-      broadcastTrackChange();
+      if (isHost) broadcastTrackChange();
       break;
     case "stateChange":
       if (payload.state) {
         onHostStateChange(payload.state);
-        const normalized: "playing" | "paused" = payload.state === "playing" ? "playing" : "paused";
-        broadcastStateChange(normalized);
+        if (isHost) {
+          const normalized: "playing" | "paused" = payload.state === "playing" ? "playing" : "paused";
+          broadcastStateChange(normalized);
+        }
       }
       break;
     case "seek":
       if (typeof payload.position === "number") {
         onHostSeek(payload.position);
-        broadcastSeek(payload.position);
+        if (isHost) broadcastSeek(payload.position);
       }
       break;
     case "queueUpdate":
       if (payload.queue && typeof payload.currentIndex === "number") {
         onHostQueueUpdate(payload.queue, payload.currentIndex);
-        broadcastQueueUpdate();
+        if (isHost) broadcastQueueUpdate();
       }
       break;
   }

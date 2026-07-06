@@ -8,6 +8,11 @@ export declare class AudioPlayer {
   reinitOutput(): void
   /** 设置封面缓存目录（在 load 前调用一次即可） */
   setCoverCacheDir(dir: string): void
+  /**
+   * 设置全局代理 URL，对后续创建的 HttpRangeSource 生效
+   * @param proxyUrl - 完整代理 URL（如 `http://host:port` / `socks5://user:pass@host:port`）；传 null 关闭代理
+   */
+  setProxy(proxyUrl?: string | undefined | null): void
   /** 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用 */
   onEvent(callback: (event: JsPlayerEvent) => void): void
   /**
@@ -51,10 +56,23 @@ export declare class AudioPlayer {
   getDuration(): number
   /** 获取当前播放状态快照 */
   getStatus(): JsPlayerStatus
+  /**
+   * 取实际进入 DSP 链的采样率（Hz）
+   * 高采样率设备 + 高采样率源时保留母带细节（受 MAX_DSP_SAMPLE_RATE 上限约束），
+   * UI 据此显示真实工作采样率而非 48k 占位
+   */
+  getEffectiveSampleRate(): number
   /** 启用/禁用 FFT 频谱推送（前端需要显示频谱时启用，不显示时禁用以节省性能） */
   setFftEnabled(enabled: boolean): void
   /** 获取 FFT 推送开关状态 */
   getFftEnabled(): boolean
+  /**
+   * 启用/禁用 FFT 等响度补偿（BetterLyrics 风格的高频视觉强化）
+   * 开启后按 bin 中心频率乘增益：20Hz → 1.0，20kHz → 12.0，对数插值
+   */
+  setFftEqualLoudness(enabled: boolean): void
+  /** 获取 FFT 等响度补偿开关状态 */
+  getFftEqualLoudness(): boolean
   /** 启用/禁用音量归一化（实时响度均衡） */
   setNormalizationEnabled(enabled: boolean): void
   /** 获取音量归一化开关状态 */
@@ -142,13 +160,86 @@ export declare class AudioPlayer {
    * 配置音频超分（高频激励器）
    * @param enabled - 是否启用
    * @param backend - 后端选择（0=CPU, 1=GPU, 2=NPU；GPU/NPU 当前回退到 CPU）
+   * @param params - 超分参数（高通频率/Q、驱动强度、混合比例、bypass 等）
    */
-  setAudioSuperResolution(enabled: boolean, backend: number): void
+  setAudioSuperResolution(enabled: boolean, backend: number, params: JsSuperResParams): void
+  /** 仅更新超分参数（不改变 enabled / backend） */
+  setAudioSuperResolutionParams(params: JsSuperResParams): void
+  /** 获取音频超分当前参数 */
+  getAudioSuperResolutionParams(): JsSuperResParams
   /** 获取音频超分当前生效后端（GPU/NPU 不可用时回退为 CPU=0） */
   getAudioSuperResolutionEffectiveBackend(): number
   /** 获取音频超分开关状态 */
   getAudioSuperResolutionEnabled(): boolean
+  /**
+   * 配置低音增强
+   * @param enabled - 是否启用
+   * @param params - 参数（截止频率、增益、Q、bypass）
+   */
+  setBassEnhancer(enabled: boolean, params: JsBassEnhancerParams): void
+  /** 仅更新低音增强参数 */
+  setBassEnhancerParams(params: JsBassEnhancerParams): void
+  /** 获取低音增强当前参数 */
+  getBassEnhancerParams(): JsBassEnhancerParams
+  /** 获取低音增强开关状态 */
+  getBassEnhancerEnabled(): boolean
+  /**
+   * 配置立体声展宽
+   * @param enabled - 是否启用
+   * @param params - 参数（width 0.0~2.0、bypass）
+   */
+  setStereoWidener(enabled: boolean, params: JsStereoWidenerParams): void
+  /** 仅更新立体声展宽参数 */
+  setStereoWidenerParams(params: JsStereoWidenerParams): void
+  /** 获取立体声展宽当前参数 */
+  getStereoWidenerParams(): JsStereoWidenerParams
+  /** 获取立体声展宽开关状态 */
+  getStereoWidenerEnabled(): boolean
+  /**
+   * 配置响度归一化（输出侧实时保护）
+   * @param enabled - 是否启用
+   * @param params - 参数（目标 LUFS、最大增益 dB、bypass）
+   */
+  setLoudnessNormalizer(enabled: boolean, params: JsLoudnessNormalizerParams): void
+  /** 仅更新响度归一化参数 */
+  setLoudnessNormalizerParams(params: JsLoudnessNormalizerParams): void
+  /** 获取响度归一化当前参数 */
+  getLoudnessNormalizerParams(): JsLoudnessNormalizerParams
+  /** 获取响度归一化开关状态 */
+  getLoudnessNormalizerEnabled(): boolean
+  /**
+   * 配置神经网络上采样
+   * @param enabled - 是否启用
+   * @param backend - 后端选择（0=Fallback 算法兜底，1=ONNX Runtime；Onnx 后端仅在模型加载成功时才生效）
+   * @param params - 参数（输入增益、湿信号混合比例、bypass）
+   */
+  setNeuralUpsample(enabled: boolean, backend: number, params: JsNeuralUpsampleParams): void
+  /** 仅更新神经网络上采样参数（不改变 enabled / backend） */
+  setNeuralUpsampleParams(params: JsNeuralUpsampleParams): void
+  /** 获取神经网络上采样当前参数 */
+  getNeuralUpsampleParams(): JsNeuralUpsampleParams
+  /** 获取神经网络上采样当前生效后端（Onnx 模型未加载时回退为 Fallback=0） */
+  getNeuralUpsampleEffectiveBackend(): number
+  /** 获取神经网络上采样开关状态 */
+  getNeuralUpsampleEnabled(): boolean
+  /**
+   * 尝试加载 ONNX 模型
+   * @param path - 模型文件绝对路径（如 {userData}/app-data/models/super_res.onnx）
+   * @returns 加载成功返回 true，失败返回 false（前端可提示用户检查模型文件）
+   */
+  loadNeuralModel(path: string): boolean
+  /** 取已加载的 ONNX 模型路径（None = 未加载，前端据此显示提示） */
+  getNeuralModelPath(): string | null
 }
+
+/**
+ * 分析整曲音频特征（BPM / 调式 / LUFS / 人声）
+ *
+ * 在 tokio 阻塞线程执行，避免阻塞 Node.js 事件循环。
+ * 解码整曲到 8 kHz 立体声 f32 缓冲区，30 分钟上限，超长文件只取前段。
+ * @param source - 音频源（本地路径 / 网络 URL / 加密文件路径）
+ */
+export declare function analyzeAudioFile(source: string): Promise<JsAudioAnalysis>
 
 /** 取消正在进行的扫描任务 */
 export declare function cancelScan(): void
@@ -162,6 +253,20 @@ export interface FileRecord {
 
 /** 初始化原生日志系统。重复调用是无害的（HMR 重载时主进程可能多次注入） */
 export declare function initLogger(logDir: string, isDev: boolean): void
+
+/** 音频分析结果（BPM / 调式 / LUFS / 人声） */
+export interface JsAudioAnalysis {
+  /** 节拍速度（BPM），未检测到为 0 */
+  bpm: number
+  /** 音乐调式（如 "C major"、"A minor"），未检测到为空串 */
+  key: string
+  /** 整合响度（LUFS），静音为 -70 */
+  lufs: number
+  /** 是否含人声 */
+  hasVocals: boolean
+  /** 人声占比（0.0 ~ 1.0） */
+  vocalRatio: number
+}
 
 /** 音频输出设备信息 */
 export interface JsAudioDevice {
@@ -182,12 +287,36 @@ export interface JsBandParams {
   filterType: number
 }
 
+/** 低音增强参数 */
+export interface JsBassEnhancerParams {
+  /** 截止频率（Hz），默认 100 */
+  freq: number
+  /** 增益（dB），范围 [-6, 12]，默认 9 */
+  gainDb: number
+  /** Q 值，默认 0.7 */
+  q: number
+  /** subharmonic 混合比例（0~1），默认 0.4 */
+  harmonicsMix: number
+  /** A/B bypass */
+  bypass: boolean
+}
+
 /** 一条外部歌词，返回给 JS 侧（仅格式和路径，内容按需加载） */
 export interface JsExternalLyric {
   /** 格式（如 "lrc", "ttml", "yrc", "qrc"） */
   format: string
   /** 文件路径 */
   path: string
+}
+
+/** 响度归一化参数 */
+export interface JsLoudnessNormalizerParams {
+  /** 目标响度（LUFS，简化为 RMS dB），默认 -10.0 */
+  targetLufs: number
+  /** 最大增益（dB），默认 9.0 */
+  maxGainDb: number
+  /** A/B bypass */
+  bypass: boolean
 }
 
 /** 歌曲完整元信息，返回给 JS 侧（load 时一次性返回） */
@@ -217,6 +346,16 @@ export interface JsMusicMetadata {
   externalLyrics: Array<JsExternalLyric>
   /** 封面缩略图路径（300x300，用于前端日常显示） */
   cover?: string
+}
+
+/** 神经网络上采样参数（与 Rust NeuralUpsampleParams 对齐） */
+export interface JsNeuralUpsampleParams {
+  /** 输入增益（dB），默认 0 */
+  inputGainDb: number
+  /** 湿信号混合比例，默认 0.5 */
+  wetMix: number
+  /** A/B bypass */
+  bypass: boolean
 }
 
 /** 播放器事件，推送给 JS 侧 */
@@ -286,6 +425,38 @@ export interface JsScannedTrack {
   mtime: number
   /** 创建时间（Unix ms） */
   ctime: number
+}
+
+/** 立体声展宽参数 */
+export interface JsStereoWidenerParams {
+  /** 展宽系数，0.0 ~ 2.0，默认 1.4 */
+  width: number
+  /** Cross-feed 混合量，0.0 ~ 0.5，默认 0.2 */
+  crossFeed: number
+  /** HAAS 效应开关：true 时右声道延迟 8ms 制造空间感，默认 false */
+  haasEnabled: boolean
+  /** A/B bypass */
+  bypass: boolean
+}
+
+/** 音频超分参数（与 Rust SuperResParams 对齐） */
+export interface JsSuperResParams {
+  /** 高通截止频率（Hz），默认 4500 */
+  hpFreq: number
+  /** 高通 Q 值，默认 0.7 */
+  hpQ: number
+  /** 高频激励驱动强度，默认 3.0 */
+  drive: number
+  /** 二次谐波驱动，默认 0.6 */
+  h2Drive: number
+  /** 二次谐波混合比例，默认 0.08 */
+  h2Mix: number
+  /** 湿信号混合比例，默认 0.40 */
+  wetMix: number
+  /** 输入安全限制，默认 1.2 */
+  inputLimit: number
+  /** A/B bypass */
+  bypass: boolean
 }
 
 /**

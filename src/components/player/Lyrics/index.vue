@@ -111,6 +111,8 @@ const props = withDefaults(
     fanMaxBlur?: number;
     /** 扇形模式是否启用底框背景 @default true */
     fanEnableBackground?: boolean;
+    /** 扇形模式激活行是否始终显示底框（依赖 fanEnableBackground）@default false */
+    fanAlwaysShowActiveBg?: boolean;
     /** 扇形模式是否启用长音节光辉 @default true */
     fanEnableGlow?: boolean;
     /** 鼠标滚轮方向 @default "reverse" */
@@ -143,6 +145,7 @@ const props = withDefaults(
     fanMinOpacity: DEFAULTS.fanMinOpacity,
     fanMaxBlur: DEFAULTS.fanMaxBlur,
     fanEnableBackground: DEFAULTS.fanEnableBackground,
+    fanAlwaysShowActiveBg: DEFAULTS.fanAlwaysShowActiveBg,
     fanEnableGlow: DEFAULTS.fanEnableGlow,
     lyricScrollDirection: "reverse",
   },
@@ -374,6 +377,11 @@ watch(
 watch(
   () => props.fanEnableBackground,
   (v) => renderer?.setConfig({ fanEnableBackground: v }),
+);
+
+watch(
+  () => props.fanAlwaysShowActiveBg,
+  (v) => renderer?.setConfig({ fanAlwaysShowActiveBg: v }),
 );
 
 watch(

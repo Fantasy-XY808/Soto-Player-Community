@@ -72,3 +72,17 @@ export const cacheSet = (
 export const cacheClear = (): void => {
   store.clear();
 };
+
+/**
+ * 按接口名清空缓存
+ *
+ * 缓存 key 形如 `<name>|<hash>`，按 `<name>|` 前缀过滤即可。
+ * 用于发送 / 删除评论后让 comment_music 缓存立即失效，避免主进程 2 分钟 TTL 阻塞新评论可见性
+ * @param name 接口名（如 "comment_music"）
+ */
+export const cacheClearByName = (name: string): void => {
+  const prefix = `${name}|`;
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) store.delete(key);
+  }
+};

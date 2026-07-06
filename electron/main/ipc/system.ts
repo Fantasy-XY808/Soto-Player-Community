@@ -1,4 +1,4 @@
-import { app, ipcMain, shell } from "electron";
+import { app, ipcMain, shell, dialog, BrowserWindow } from "electron";
 import { writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, basename } from "node:path";
@@ -160,8 +160,13 @@ export const registerSystemIpc = (): void => {
     if (typeof url !== "string" || !/^https?:\/\//i.test(url)) {
       return { success: false, error: "无效的 URL" };
     }
-    const buf = await fetchBytes(url, { requireImage: true });
-    return { success: true, data: buf };
+    try {
+      const buf = await fetchBytes(url, { requireImage: true });
+      return { success: true, data: buf };
+    } catch (error) {
+      systemLog.error("[system] fetchRemoteBytes failed", url, error);
+      return { success: false, error: String(error) };
+    }
   });
 
   // 保存文件到下载目录
@@ -188,5 +193,16 @@ export const registerSystemIpc = (): void => {
       systemLog.error("[system] saveFile failed", error);
       return { success: false, error: String(error) };
     }
+  });
+
+  // 弹出目录选择对话框，返回选中目录路径（用户取消返回 null）
+  // 用于 Git 浏览器等需要让用户指定本地仓库目录的场景
+  ipcMain.handle("system:pickDirectory", async (): Promise<string | null> => {
+    const win = BrowserWindow.getFocusedWindow();
+    const result = win
+      ? await dialog.showOpenDialog(win, { properties: ["openDirectory"] })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
   });
 };

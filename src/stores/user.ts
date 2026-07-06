@@ -75,6 +75,12 @@ export const useUserStore = defineStore(
     const lastRefreshAt = ref<number>(0);
     /** 是否已登录 */
     const isLoggedIn = computed(() => profile.value !== null);
+    /** 登录对话框 open 状态；放到 store 里以便任意组件触发（评论点赞未登录时打开） */
+    const loginDialogOpen = ref(false);
+    /** 打开登录对话框 */
+    const openLoginDialog = (): void => {
+      loginDialogOpen.value = true;
+    };
     /** 全部歌单 */
     const playlists = shallowRef<Playlist[]>([]);
     /** 红心歌曲 id 集合 */
@@ -545,6 +551,8 @@ export const useUserStore = defineStore(
       profile,
       lastRefreshAt,
       isLoggedIn,
+      loginDialogOpen,
+      openLoginDialog,
       fetchStatus,
       logout,
 

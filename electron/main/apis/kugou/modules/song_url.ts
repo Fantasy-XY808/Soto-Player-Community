@@ -2,13 +2,14 @@
  * 获取酷狗播放 URL（play/getdata 接口）
  *
  * 主协议：wwwapi.kugou.com/yy/index.php?r=play/getdata
- *   匿名态可拿 128k mp3；VIP 高品质需要 cookie，本项目不接入登录态故仅给 128k
+ *   匿名态可拿 128k mp3；登录态（withCredentials=true）注入 cookie 后可拿 VIP 高品质
  * 兜底：m.kugou.com/app/i/getSongInfo.php?cmd=playInfo
  *   老的移动端接口，字段名不同（url 而非 play_url），匿名态同样可拿 128k
  *
  * params:
- * - hash      文件 hash（必填），来自搜索结果的 hashes['128k'] 或顶层 hash
- * - albumId   专辑 id（可选，部分歌曲缺 album_id 会拿不到 purl）
+ * - hash              文件 hash（必填），来自搜索结果的 hashes['128k'] 或顶层 hash
+ * - albumId           专辑 id（可选，部分歌曲缺 album_id 会拿不到 purl）
+ * - withCredentials   true 时注入用户 cookie 拿 VIP URL，失败回落匿名
  *
  * 返回：
  * - code 200 + url：可播放的 http(s) 链接
@@ -80,7 +81,11 @@ interface PlayInfoResp {
 }
 
 /** 主路径：wwwapi/yy/index.php?r=play/getdata */
-const fetchByPlayGetdata = async (hash: string, albumId: string): Promise<string> => {
+const fetchByPlayGetdata = async (
+  hash: string,
+  albumId: string,
+  withCredentials: boolean,
+): Promise<string> => {
   const url =
     `${PLAY_GETDATA_URL}?r=play/getdata` +
     `&hash=${encodeURIComponent(hash)}` +
@@ -93,7 +98,7 @@ const fetchByPlayGetdata = async (hash: string, albumId: string): Promise<string
     `&format=json&showtype=1` +
     `&_=${Date.now()}`;
 
-  const body = await kgRequest<PlayDataResp>(url, { headers: KG_PLAY_HEADERS });
+  const body = await kgRequest<PlayDataResp>(url, { headers: KG_PLAY_HEADERS }, withCredentials);
   const playUrl = body?.data?.play_url ?? "";
   const backupUrl = body?.data?.play_backup_url ?? "";
   if (playUrl) {
@@ -109,13 +114,13 @@ const fetchByPlayGetdata = async (hash: string, albumId: string): Promise<string
 };
 
 /** 兜底：m.kugou.com/app/i/getSongInfo.php?cmd=playInfo */
-const fetchByPlayInfo = async (hash: string): Promise<string> => {
+const fetchByPlayInfo = async (hash: string, withCredentials: boolean): Promise<string> => {
   const url =
     `${PLAY_INFO_URL}?cmd=playInfo&hash=${encodeURIComponent(hash)}` +
     `&dfid=${KG_DFID}&mid=${KG_MID}&userid=0&clientver=${KG_CLIENT_VER}&appid=${KG_APP_ID}` +
     `&format=json&showtype=1&_=${Date.now()}`;
 
-  const body = await kgRequest<PlayInfoResp>(url, { headers: KG_MOBILE_HEADERS });
+  const body = await kgRequest<PlayInfoResp>(url, { headers: KG_MOBILE_HEADERS }, withCredentials);
   const u = body?.url ?? "";
   const b = body?.backup_url ?? "";
   if (u) {
@@ -132,18 +137,20 @@ const song_url: KGModule = async (params) => {
   const hash = String(params.hash ?? "").trim();
   if (!hash) return { code: 400, url: "", message: "hash required" };
   const albumId = String(params.albumId ?? "").trim();
+  const withCredentials = params.withCredentials === true;
 
   // 主路径优先：wwwapi 域名稳定，带 album_id 时命中率高
   try {
-    const url = await fetchByPlayGetdata(hash, albumId);
+    const url = await fetchByPlayGetdata(hash, albumId, withCredentials);
     if (url) return { code: 200, url };
   } catch (err) {
     kugouLog.warn("play/getdata 异常，回落 playInfo:", err);
   }
 
   // 兜底：playInfo 老接口，字段名不同；部分曲目 wwwapi 拒绝但 playInfo 仍可返回
+  // playInfo 老接口对 VIP cookie 不敏感，回落时不再带凭证
   try {
-    const url = await fetchByPlayInfo(hash);
+    const url = await fetchByPlayInfo(hash, false);
     if (url) return { code: 200, url };
   } catch (err) {
     kugouLog.warn("playInfo 兜底也失败:", err);

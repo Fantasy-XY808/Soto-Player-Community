@@ -20,14 +20,14 @@ const goHome = (): void => {
     >
       <SLogo :size="30" class="shrink-0" />
       <div
-        class="flex flex-col overflow-hidden transition-[width,opacity,margin] duration-300"
-        :class="collapsed ? 'w-0 opacity-0 ml-0' : 'w-[150px] ml-2'"
+        class="flex flex-col overflow-hidden transition-[max-width,opacity,margin] duration-300"
+        :class="collapsed ? 'max-w-0 opacity-0 ml-0' : 'max-w-[180px] opacity-100 ml-2'"
       >
-        <span class="text-[22px] text-primary mt-0.5 leading-7 whitespace-nowrap font-logo">
+        <span class="text-[16px] text-primary leading-5 whitespace-nowrap font-logo font-semibold">
           Soto Player
         </span>
         <span
-          class="text-[10px] text-on-surface-variant/70 leading-3 whitespace-nowrap font-medium tracking-wider pl-0.5"
+          class="text-[11px] text-on-surface-variant/60 ml-1 leading-4 whitespace-nowrap font-logo font-light"
         >
           Community
         </span>

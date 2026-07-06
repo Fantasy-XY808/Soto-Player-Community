@@ -163,6 +163,8 @@ export class LyricRenderer {
   private alphaReleaseSpeed = DEFAULTS.alphaReleaseSpeed;
   /** 非激活行基础透明度 */
   private inactiveAlpha = DEFAULTS.inactiveAlpha;
+  /** 是否隐藏已播放行（i < activeLineIndex 的非激活行透明度归零） */
+  private hidePassedLines = DEFAULTS.hidePassedLines;
   /** 是否启用逐行模糊 */
   private enableBlur = DEFAULTS.enableBlur;
   /** 是否启用逐字高亮 */
@@ -194,6 +196,8 @@ export class LyricRenderer {
   private fanMaxBlur = DEFAULTS.fanMaxBlur;
   /** 扇形模式是否启用底框背景 */
   private fanEnableBackground = DEFAULTS.fanEnableBackground;
+  /** 扇形模式激活行是否始终显示底框 */
+  private fanAlwaysShowActiveBg = DEFAULTS.fanAlwaysShowActiveBg;
   /** 扇形模式是否启用长音节光辉 */
   private fanEnableGlow = DEFAULTS.fanEnableGlow;
   /** 鼠标滚轮方向：natural=内容随手势同向，reverse=内容随手势反向 */
@@ -268,6 +272,10 @@ export class LyricRenderer {
     container.addEventListener("mouseenter", this.handleMouseEnter);
     container.addEventListener("mouseleave", this.handleMouseLeave);
     document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    // Electron 窗口失焦时 document.hidden 仍为 false，RAF 会被节流但不会停止
+    // 主动监听 window blur/focus 触发 freeze/resume，避免失焦期间 RAF 残留写入
+    window.addEventListener("blur", this.handleWindowBlur);
+    window.addEventListener("focus", this.handleWindowFocus);
     // 启动渲染循环
     this.animationFrameId = requestAnimationFrame(this.onAnimationFrame);
   }
@@ -318,6 +326,8 @@ export class LyricRenderer {
     this.container.removeEventListener("mouseenter", this.handleMouseEnter);
     this.container.removeEventListener("mouseleave", this.handleMouseLeave);
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    window.removeEventListener("blur", this.handleWindowBlur);
+    window.removeEventListener("focus", this.handleWindowFocus);
     this.innerElement.remove();
     this.container.classList.remove("lp-root", "lp-has-duet");
   };
@@ -334,7 +344,13 @@ export class LyricRenderer {
     }
     const seekTime = this.pendingPlayTime >= 0 ? this.pendingPlayTime : 0;
     this.lineAnimations.cancelAll();
-    for (const element of this.lineElements) element.remove();
+    // 移除前清理 transform/will-change，让浏览器立即回收旧 DOM 的 GPU 合成层纹理
+    // 否则纹理延迟回收与新 DOM 在 RAF 间隙堆叠叠加，视觉上形成"两次"
+    for (const element of this.lineElements) {
+      element.style.willChange = "";
+      element.style.transform = "";
+      element.remove();
+    }
     // 为 LRC 等行级格式合成逐字 timing，让静态行也有扫字效果
     const renderedLines = synthesizeWordsIfNeeded(lines);
     // 重置状态
@@ -395,11 +411,12 @@ export class LyricRenderer {
     this.fanCurrentDx = new Float64Array(lineCount);
     this.fanInView = new Array(lineCount).fill(false);
     this.container.classList.toggle("lp-fan-mode", this.layoutMode === "fan");
+    this.container.classList.toggle("lp-line-bg", this.fanEnableBackground);
     this.container.classList.toggle(
-      "lp-fan-bg",
-      this.layoutMode === "fan" && this.fanEnableBackground,
+      "lp-line-active-bg",
+      this.fanEnableBackground && this.fanAlwaysShowActiveBg,
     );
-    this.container.classList.toggle("lp-fan-glow", this.layoutMode === "fan" && this.fanEnableGlow);
+    this.container.classList.toggle("lp-line-glow", this.fanEnableGlow);
 
     this.entranceComplete = false;
 
@@ -442,6 +459,9 @@ export class LyricRenderer {
     this.handleSeek(seekTime);
     this.calculateLayout(true);
     this.playEntranceAnimation(this.containerHeight * 0.6);
+    // 入场动画已将弹簧 current 移到屏外，立即同步写入首帧 transform，
+    // 避免 RAF 间隙新 DOM 堆叠在容器中心形成"双显"
+    this.flushTransformsImmediate();
     this.needsFullSync = true;
   };
 
@@ -507,6 +527,7 @@ export class LyricRenderer {
     if (config.alphaAttackSpeed != null) this.alphaAttackSpeed = config.alphaAttackSpeed;
     if (config.alphaReleaseSpeed != null) this.alphaReleaseSpeed = config.alphaReleaseSpeed;
     if (config.inactiveAlpha != null) this.inactiveAlpha = config.inactiveAlpha;
+    if (config.hidePassedLines != null) this.hidePassedLines = config.hidePassedLines;
     if (config.enableBlur != null) this.enableBlur = config.enableBlur;
     if (config.enableWordHighlight != null) this.enableWordHighlight = config.enableWordHighlight;
     if (config.enableFloatAnimation != null)
@@ -528,24 +549,24 @@ export class LyricRenderer {
     if (config.fanMinOpacity != null) this.fanMinOpacity = config.fanMinOpacity;
     if (config.fanMaxBlur != null) this.fanMaxBlur = config.fanMaxBlur;
     if (config.fanEnableBackground != null) this.fanEnableBackground = config.fanEnableBackground;
+    if (config.fanAlwaysShowActiveBg != null)
+      this.fanAlwaysShowActiveBg = config.fanAlwaysShowActiveBg;
     if (config.fanEnableGlow != null) this.fanEnableGlow = config.fanEnableGlow;
     if (config.lyricScrollDirection != null)
       this.lyricScrollDirection = config.lyricScrollDirection;
 
-    // 扇形底框/光辉 class 依赖 layoutMode + 开关，配置变更后立即同步
+    // 底框/光辉 class 依赖开关，配置变更后立即同步（对所有 layoutMode 生效）
     if (
-      config.layoutMode != null ||
       config.fanEnableBackground != null ||
+      config.fanAlwaysShowActiveBg != null ||
       config.fanEnableGlow != null
     ) {
+      this.container.classList.toggle("lp-line-bg", this.fanEnableBackground);
       this.container.classList.toggle(
-        "lp-fan-bg",
-        this.layoutMode === "fan" && this.fanEnableBackground,
+        "lp-line-active-bg",
+        this.fanEnableBackground && this.fanAlwaysShowActiveBg,
       );
-      this.container.classList.toggle(
-        "lp-fan-glow",
-        this.layoutMode === "fan" && this.fanEnableGlow,
-      );
+      this.container.classList.toggle("lp-line-glow", this.fanEnableGlow);
     }
 
     if (layoutDirty && this.lineElements.length > 0) {
@@ -692,23 +713,38 @@ export class LyricRenderer {
     // seek 后原激活行（现已 inactive）的 alphaValues 仍残留 1.0，
     // 按释放系数衰减到 inactiveAlpha 约 333ms，期间会显示成"已播放亮色"。
     // 直接把非激活行瞬切到 inactiveAlpha，激活行保留 fade-in 渐入动画。
+    // 同时清除 --t 残留：旧激活行的 --t 仍是上次播放时的时间值，
+    // 会让逐字 mask 停在中间位置显示亮区残留，视觉上呈"已播放"样式
     const inactiveBright = this.inactiveAlpha;
-    const inactiveDark = this.enableWordHighlight ? this.inactiveAlpha : this.inactiveAlpha;
+    const inactiveDark = this.inactiveAlpha;
+    const seekActiveIdx = this.activeLineIndex;
+    const seekLineCount = lines.length;
     for (let i = 0; i < lines.length; i++) {
       if (this.activeLineSet.has(i)) continue;
+      // hidePassedLines：已播放行（i < activeIdx 且非歌曲结尾）瞬切到 0，
+      // 避免 RAF 插值期间残留 inactiveAlpha 形成短暂灰雾
+      const isPassedHidden =
+        this.hidePassedLines &&
+        seekActiveIdx >= 0 &&
+        i < seekActiveIdx &&
+        seekActiveIdx < seekLineCount;
+      const bright = isPassedHidden ? 0 : inactiveBright;
+      const dark = isPassedHidden ? 0 : inactiveDark;
       const alphaIdx = i * 2;
-      this.alphaValues[alphaIdx] = inactiveBright;
-      this.alphaValues[alphaIdx + 1] = inactiveDark;
+      this.alphaValues[alphaIdx] = bright;
+      this.alphaValues[alphaIdx + 1] = dark;
       const lineEl = this.lineElements[i];
       if (!lineEl) continue;
-      const brightStr = inactiveBright.toFixed(3);
-      const darkStr = inactiveDark.toFixed(3);
+      const brightStr = bright.toFixed(3);
+      const darkStr = dark.toFixed(3);
       const alphaKey = brightStr + darkStr;
       if (this.cachedAlphaKeys[i] !== alphaKey) {
         this.cachedAlphaKeys[i] = alphaKey;
         lineEl.style.setProperty("--ba", brightStr);
         lineEl.style.setProperty("--da", darkStr);
       }
+      // 清除 --t 残留，让逐字 mask 回到初始位置（亮区全覆盖）
+      lineEl.style.removeProperty("--t");
     }
 
     this.calculateLayout(snap, true);
@@ -722,13 +758,23 @@ export class LyricRenderer {
    * 隐藏/冻结恢复后的瞬移布局可能把这些行直接带回视口，需一次性对齐
    */
   private snapVisualState = () => {
-    for (let i = 0; i < this.lines.length; i++) {
+    const activeIdx = this.activeLineIndex;
+    const lineCount = this.lines.length;
+    for (let i = 0; i < lineCount; i++) {
       const lineEl = this.lineElements[i];
       if (!lineEl) continue;
       const isActive = this.activeLineSet.has(i);
-      // 三态：active 100% / 其余统一 inactiveAlpha（30% 灰），不再把已播放行强制压到 0.0001
-      const bright = isActive ? 1.0 : this.inactiveAlpha;
-      const dark = this.enableWordHighlight ? this.inactiveAlpha : bright;
+      // 隐藏已播放行启用时，已播放行（i < activeIdx 且非歌曲结尾）整体透明
+      // activeIdx === lineCount 表示歌曲已播完，此时保留所有行可见避免末屏突然清空
+      const isPassedHidden =
+        this.hidePassedLines &&
+        !isActive &&
+        activeIdx >= 0 &&
+        i < activeIdx &&
+        activeIdx < lineCount;
+      // 三态：active 100% / 已播放隐藏 0 / 其余统一 inactiveAlpha（30% 灰）
+      const bright = isPassedHidden ? 0 : isActive ? 1.0 : this.inactiveAlpha;
+      const dark = isPassedHidden ? 0 : this.enableWordHighlight ? this.inactiveAlpha : bright;
       this.alphaValues[i * 2] = bright;
       this.alphaValues[i * 2 + 1] = dark;
       const brightStr = bright.toFixed(3);
@@ -739,8 +785,10 @@ export class LyricRenderer {
         lineEl.style.setProperty("--ba", brightStr);
         lineEl.style.setProperty("--da", darkStr);
       }
-      this.passValues[i] = 1;
-      const passKey = "1.000";
+      // pass：与 onAnimationFrame 一致，已播放隐藏时 pass=0 让整行（含副歌词）淡出
+      const pass = isPassedHidden ? 0 : 1;
+      this.passValues[i] = pass;
+      const passKey = pass.toFixed(3);
       if (this.cachedPassKeys[i] !== passKey) {
         this.cachedPassKeys[i] = passKey;
         lineEl.style.setProperty("--pass", passKey);
@@ -777,23 +825,28 @@ export class LyricRenderer {
     // 扇形模式不显示间奏圆点，强制关闭状态
     this.interludeState.isActive = false;
 
-    // 行 Y 位置：用实际 offsetHeight 累加，避免长歌词换行后与相邻行重叠
-    // 当前行居中，向上/向下按 max(fanLineHeight, 实际高度) * scale + gap 累加
+    // 行 Y 位置：fanLineHeight 优先控制行距，仅当实际行高明显更高（长歌词换行）
+    // 时才用实际值避免重叠。行间距用对称公式 (prevH + currH)/2 + gap，
+    // 保证激活行（offsetHeight 较大）到上方/下方行的间距对称，
+    // 避免"下面空、上面挤"的不对称
     // 滚动模式 scale=0.85，非滚动 scale=1
     const FAN_GAP_PX = 8;
     if (this.fanScrollLineY.length < lineCount) {
       this.fanScrollLineY = new Float64Array(lineCount);
     }
+    /** 取行高：fanLineHeight 优先，实际值明显更高时（长歌词换行）用实际值 */
+    const effH = (actual: number): number =>
+      (actual > this.fanLineHeight * 1.1 ? actual : this.fanLineHeight) * scrollScale;
     this.fanScrollLineY[targetIdx] = centerY + sOffset;
     for (let i = targetIdx + 1; i < lineCount; i++) {
-      const prevActual = this.lineHeights[i - 1] || 40;
-      const prevH = Math.max(this.fanLineHeight, prevActual) * scrollScale;
-      this.fanScrollLineY[i] = this.fanScrollLineY[i - 1] + prevH + FAN_GAP_PX;
+      const prevH = effH(this.lineHeights[i - 1] || 40);
+      const currH = effH(this.lineHeights[i] || 40);
+      this.fanScrollLineY[i] = this.fanScrollLineY[i - 1] + (prevH + currH) / 2 + FAN_GAP_PX;
     }
     for (let i = targetIdx - 1; i >= 0; i--) {
-      const currActual = this.lineHeights[i] || 40;
-      const currH = Math.max(this.fanLineHeight, currActual) * scrollScale;
-      this.fanScrollLineY[i] = this.fanScrollLineY[i + 1] - currH - FAN_GAP_PX;
+      const currH = effH(this.lineHeights[i] || 40);
+      const nextH = effH(this.lineHeights[i + 1] || 40);
+      this.fanScrollLineY[i] = this.fanScrollLineY[i + 1] - (currH + nextH) / 2 - FAN_GAP_PX;
     }
 
     for (let i = 0; i < lineCount; i++) {
@@ -803,8 +856,10 @@ export class LyricRenderer {
       if (!line) continue;
 
       const distance = i - targetIdx;
-      const absDist = Math.min(maxDist, Math.abs(distance));
-      const distanceFactor = Math.min(1, absDist / maxDist);
+      const absDist = Math.abs(distance);
+      // tanh 渐近饱和曲线：避免 |distance| >= maxDist 时 distanceFactor 钳为 1
+      // 导致前后行角度饱和为 ±fanAngle 完全相同；视口边界外的行角度仍渐近逼近
+      const distanceFactor = Math.tanh((absDist / maxDist) * 1.8) / Math.tanh(1.8);
       const dirSign = distance === 0 ? 0 : distance > 0 ? 1 : -1;
 
       // 扇形角度：滚动时归零（变竖型），非滚动时按距离因子分布
@@ -999,6 +1054,43 @@ export class LyricRenderer {
   };
 
   /**
+   * 同步写入首帧 transform，避免 setLyrics 后新 DOM 在 RAF 间隙堆叠在容器中心
+   * 仅在 setLyrics 末尾调用一次，复用 onAnimationFrame 的 transform 拼接逻辑
+   */
+  private flushTransformsImmediate = () => {
+    const lineCount = this.lineElements.length;
+    const isFanMode = this.layoutMode === "fan";
+    const viewHeight = this.containerHeight;
+    for (let i = 0; i < lineCount; i++) {
+      const lineEl = this.lineElements[i];
+      if (!lineEl) continue;
+      const posSpring = this.positionSprings[i];
+      const scaleSpring = this.scaleSprings[i];
+      if (!posSpring || !scaleSpring) continue;
+      const yPos = posSpring.getCurrentPosition();
+      const scale = scaleSpring.getCurrentPosition() / 100;
+      let transformStr: string;
+      if (isFanMode) {
+        const dx = this.fanCurrentDx[i].toFixed(1);
+        const angle = this.fanCurrentAngles[i].toFixed(2);
+        transformStr = `translate(calc(-50% + ${dx}px), calc(-50% + ${yPos.toFixed(1)}px)) rotate(${angle}deg) scale(${scale.toFixed(4)})`;
+      } else {
+        transformStr = `translateY(${yPos.toFixed(1)}px) scale(${scale.toFixed(4)})`;
+      }
+      this.cachedTransforms[i] = transformStr;
+      lineEl.style.transform = transformStr;
+      // 同步 will-change 状态，让首次 RAF 写入与视口裁剪逻辑一致
+      const inView = isFanMode
+        ? this.fanInView[i]
+        : yPos >= -500 && yPos <= viewHeight + 500;
+      if (this.lineWillChange[i] !== inView) {
+        this.lineWillChange[i] = inView;
+        lineEl.style.willChange = inView ? "transform, filter" : "";
+      }
+    }
+  };
+
+  /**
    * rAF 回调
    * @param timestamp - 当前时间戳
    */
@@ -1128,16 +1220,28 @@ export class LyricRenderer {
       }
 
       const isActive = this.activeLineSet.has(i);
+      // hidePassedLines：已播放行（i < activeIdx 且非歌曲结尾）整体透明
+      // 对所有 layoutMode（默认/扇形）生效；
+      // activeIdx === lineCount 表示歌曲已播完，此时保留所有行可见避免末屏突然清空
+      const isPassedHidden =
+        this.hidePassedLines &&
+        !isActive &&
+        activeIdx >= 0 &&
+        i < activeIdx &&
+        activeIdx < lineCount;
 
       // 扇形模式：距激活行越远透明度越低，由 fanMinOpacity 控制最远行
       // 滚动时取消距离衰减，所有行统一全亮（参照 BetterLyrics LyricsAnimator.cs:384-410）
       let targetBright: number;
-      if (isFanMode) {
+      if (isPassedHidden) {
+        targetBright = 0;
+      } else if (isFanMode) {
         if (isActive || this.isUserScrolling) {
           targetBright = 1.0;
         } else {
           const fanDist = Math.abs(i - activeIdx);
-          const fanDistFactor = Math.min(1, fanDist / fanMaxVisible);
+          // tanh 渐近饱和曲线：与角度饱和修复保持一致，避免远端透明度阶梯状饱和
+          const fanDistFactor = Math.tanh((fanDist / fanMaxVisible) * 1.8) / Math.tanh(1.8);
           targetBright = 1 - (1 - this.fanMinOpacity) * fanDistFactor;
         }
       } else {
@@ -1159,7 +1263,12 @@ export class LyricRenderer {
       }
       this.alphaValues[alphaIdx] = brightValue;
 
-      const targetDark = this.enableWordHighlight ? this.inactiveAlpha : targetBright;
+      // 已播放隐藏时 dark 也归零，避免逐字高亮 mask 仍残留 30% 可见
+      const targetDark = isPassedHidden
+        ? 0
+        : this.enableWordHighlight
+          ? this.inactiveAlpha
+          : targetBright;
       let darkValue = this.alphaValues[alphaIdx + 1];
       if (Math.abs(targetDark - darkValue) < 0.001) {
         darkValue = targetDark;
@@ -1185,9 +1294,10 @@ export class LyricRenderer {
         lineEl.style.setProperty("--da", darkStr);
       }
 
-      // pass 恒为 1（已播放行不再淡出，与未播放行同样保持 30% 灰）
-      if (this.passValues[i] < 0.999) {
-        const targetPass = 1;
+      // pass：与 isPassedHidden 一致，已播放行（i < activeIdx 且非歌曲结尾）淡出到 0
+      // active 行与未播放行 pass=1，副歌词 --pass 也由本变量驱动以联动淡出
+      const targetPass = isPassedHidden ? 0 : 1;
+      if (this.passValues[i] !== targetPass) {
         let passValue = this.passValues[i];
         if (Math.abs(targetPass - passValue) < 0.001) passValue = targetPass;
         else passValue += (targetPass - passValue) * releaseFactor;
@@ -1398,6 +1508,18 @@ export class LyricRenderer {
     // 检测到跳变则瞬移布局，避免旧歌词行残留
     this.snapNextSeek = true;
     this.needsFullSync = true;
+  };
+
+  /** 窗口失焦：document.hidden 仍为 false 但 RAF 已被节流，主动 freeze 避免脏写 */
+  private handleWindowBlur = () => {
+    if (document.hidden) return;
+    this.freeze();
+  };
+
+  /** 窗口聚焦：恢复渲染并触发跳变检测以瞬移布局对齐 */
+  private handleWindowFocus = () => {
+    if (document.hidden) return;
+    this.resume();
   };
 
   /** 将当前弹簧参数应用到所有弹簧实例 */

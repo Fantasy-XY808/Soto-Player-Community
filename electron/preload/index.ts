@@ -5,7 +5,16 @@ import type {
   ListenTogetherStatus,
   ListenTogetherLocalUser,
   ListenTogetherDiscoveredSession,
+  ListenTogetherPermissions,
+  BassEnhancerSettings,
+  LoudnessNormalizerSettings,
+  NeuralUpsampleSettings,
+  SpatialAudioSettings,
+  StereoWidenerSettings,
+  SuperResParams,
+  SongUnlockServerKey,
 } from "@shared/types/settings";
+import type { EasyTierStatus } from "@main/listenTogether";
 import type { PluginInfo, PluginResolveUrlArgs } from "@shared/types/plugin";
 import type { HotkeyActionId, HotkeyBinding, HotkeyConflict } from "@shared/types/hotkey";
 import type { LoadOptions, TrackSource, Track } from "@shared/types/player";
@@ -17,7 +26,13 @@ import type { CloudUploadProgress } from "@shared/types/cloudUpload";
 
 /** 订阅主进程推送的事件 */
 const subscribe = <T>(channel: string, callback: (data: T) => void): (() => void) => {
-  const handler = (_event: Electron.IpcRendererEvent, data: T): void => callback(data);
+  const handler = (_event: Electron.IpcRendererEvent, data: T): void => {
+    try {
+      callback(data);
+    } catch (err) {
+      console.error(`[preload] IPC handler error on "${channel}":`, err);
+    }
+  };
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 };
@@ -60,10 +75,17 @@ const api = {
     getFadeDuration: () => ipcRenderer.invoke("player:getFadeDuration"),
     // 获取播放状态快照
     getStatus: () => ipcRenderer.invoke("player:getStatus"),
+    // 取实际进入 DSP 链的采样率（Hz）；高采样率设备 + 高采样率源时保留母带细节
+    getEffectiveSampleRate: () => ipcRenderer.invoke("player:getEffectiveSampleRate"),
     // 获取 FFT 频谱数据
     getFftData: () => ipcRenderer.invoke("player:getFftData"),
     // 启用/禁用 FFT 频谱推送
     setFftEnabled: (enabled: boolean) => ipcRenderer.invoke("player:setFftEnabled", enabled),
+    // 启用/禁用 FFT 等响度补偿（BetterLyrics 风格高频视觉强化）
+    setFftEqualLoudness: (enabled: boolean) =>
+      ipcRenderer.invoke("player:setFftEqualLoudness", enabled),
+    // 取 FFT 等响度补偿开关状态
+    getFftEqualLoudness: () => ipcRenderer.invoke("player:getFftEqualLoudness"),
     // 启用/禁用音量均衡
     setNormalizationEnabled: (enabled: boolean) =>
       ipcRenderer.invoke("player:setNormalizationEnabled", enabled),
@@ -113,11 +135,71 @@ const api = {
     setSurroundGain: (gain: number) => ipcRenderer.invoke("player:setSurroundGain", gain),
     // 配置音频超分（高频激励器）
     // backend: 0=CPU, 1=GPU, 2=NPU（GPU/NPU 当前回退到 CPU）
-    setAudioSuperResolution: (enabled: boolean, backend: number) =>
-      ipcRenderer.invoke("player:setAudioSuperResolution", enabled, backend),
+    // params: SuperResParams（高通/激励/混合等可调项）
+    setAudioSuperResolution: (enabled: boolean, backend: number, params: SuperResParams) =>
+      ipcRenderer.invoke("player:setAudioSuperResolution", enabled, backend, params),
+    // 仅更新超分参数（不改变 enabled / backend）
+    setAudioSuperResolutionParams: (params: SuperResParams) =>
+      ipcRenderer.invoke("player:setAudioSuperResolutionParams", params),
+    // 取音频超分当前参数
+    getAudioSuperResolutionParams: () => ipcRenderer.invoke("player:getAudioSuperResolutionParams"),
     // 取音频超分当前实际生效后端（GPU/NPU 不可用时回退为 0=CPU）
     getAudioSuperResolutionEffectiveBackend: () =>
       ipcRenderer.invoke("player:getAudioSuperResolutionEffectiveBackend"),
+    // 配置低音增强（2 阶 low-shelf + tanh 软饱和）
+    setBassEnhancer: (enabled: boolean, params: BassEnhancerSettings) =>
+      ipcRenderer.invoke("player:setBassEnhancer", enabled, params),
+    // 仅更新低音增强参数
+    setBassEnhancerParams: (params: BassEnhancerSettings) =>
+      ipcRenderer.invoke("player:setBassEnhancerParams", params),
+    // 取低音增强当前参数
+    getBassEnhancerParams: () => ipcRenderer.invoke("player:getBassEnhancerParams"),
+    // 取低音增强开关状态
+    getBassEnhancerEnabled: () => ipcRenderer.invoke("player:getBassEnhancerEnabled"),
+    // 配置立体声展宽（Mid-Side 处理）
+    setStereoWidener: (enabled: boolean, params: StereoWidenerSettings) =>
+      ipcRenderer.invoke("player:setStereoWidener", enabled, params),
+    // 仅更新立体声展宽参数
+    setStereoWidenerParams: (params: StereoWidenerSettings) =>
+      ipcRenderer.invoke("player:setStereoWidenerParams", params),
+    // 取立体声展宽当前参数
+    getStereoWidenerParams: () => ipcRenderer.invoke("player:getStereoWidenerParams"),
+    // 取立体声展宽开关状态
+    getStereoWidenerEnabled: () => ipcRenderer.invoke("player:getStereoWidenerEnabled"),
+    // 配置响度归一化（500ms 滑动窗口 RMS）
+    setLoudnessNormalizer: (enabled: boolean, params: LoudnessNormalizerSettings) =>
+      ipcRenderer.invoke("player:setLoudnessNormalizer", enabled, params),
+    // 仅更新响度归一化参数
+    setLoudnessNormalizerParams: (params: LoudnessNormalizerSettings) =>
+      ipcRenderer.invoke("player:setLoudnessNormalizerParams", params),
+    // 取响度归一化当前参数
+    getLoudnessNormalizerParams: () => ipcRenderer.invoke("player:getLoudnessNormalizerParams"),
+    // 取响度归一化开关状态
+    getLoudnessNormalizerEnabled: () => ipcRenderer.invoke("player:getLoudnessNormalizerEnabled"),
+    // 配置神经网络上采样（框架就绪 + 算法兜底：无 ONNX 模型时直通）
+    // backend: 0=Fallback 直通, 1=ONNX（模型未加载时回退为 0）
+    setNeuralUpsample: (
+      enabled: boolean,
+      backend: number,
+      params: NeuralUpsampleSettings["params"],
+    ) => ipcRenderer.invoke("player:setNeuralUpsample", enabled, backend, params),
+    // 仅更新神经网络上采样参数（不改变 enabled / backend）
+    setNeuralUpsampleParams: (params: NeuralUpsampleSettings["params"]) =>
+      ipcRenderer.invoke("player:setNeuralUpsampleParams", params),
+    // 取神经网络上采样当前参数
+    getNeuralUpsampleParams: () => ipcRenderer.invoke("player:getNeuralUpsampleParams"),
+    // 取神经网络上采样当前实际生效后端（模型未加载时回退为 0=Fallback）
+    getNeuralUpsampleEffectiveBackend: () =>
+      ipcRenderer.invoke("player:getNeuralUpsampleEffectiveBackend"),
+    // 取神经网络上采样开关状态
+    getNeuralUpsampleEnabled: () => ipcRenderer.invoke("player:getNeuralUpsampleEnabled"),
+    // 加载 ONNX 模型（框架阶段仅校验文件存在性，不真正创建推理 session）
+    loadNeuralModel: (path: string) => ipcRenderer.invoke("player:loadNeuralModel", path),
+    // 取当前已加载的 ONNX 模型路径
+    getNeuralModelPath: () => ipcRenderer.invoke("player:getNeuralModelPath"),
+    // 配置空间音频（组合预设：开启时同步配置 StereoWidener + BassEnhancer + SuperRes）
+    setSpatialAudio: (params: SpatialAudioSettings) =>
+      ipcRenderer.invoke("player:setSpatialAudio", params),
     // 设置播放速度（0.5 ~ 2.0），引擎侧自动 clamp
     setSpeed: (speed: number) => ipcRenderer.invoke("player:setSpeed", speed),
     // 设置音调偏移（半音 -12 ~ 12），引擎侧自动 clamp
@@ -185,6 +267,8 @@ const api = {
     // 保存文件到下载目录
     saveFile: (data: ArrayBuffer, defaultName: string) =>
       ipcRenderer.invoke("system:saveFile", data, defaultName),
+    // 弹出目录选择对话框，返回选中目录路径（取消返回 null）
+    pickDirectory: (): Promise<string | null> => ipcRenderer.invoke("system:pickDirectory"),
     // 重启应用
     relaunch: () => ipcRenderer.invoke("system:relaunch"),
     // 订阅主进程下发的 orpheus 唤起 URL
@@ -376,6 +460,9 @@ const api = {
       ipcRenderer.invoke("apis:call", platform, name, params ?? {}),
     // 清空指定平台的登录态
     clearSession: (platform: string) => ipcRenderer.invoke("apis:clearSession", platform),
+    // 按接口名清除指定平台内存缓存（如 netease.comment_music）
+    invalidateCache: (platform: string, name: string) =>
+      ipcRenderer.invoke("apis:invalidateCache", platform, name),
     // 打开官方网页登录窗口
     openLoginWeb: (platform: string) => ipcRenderer.invoke("apis:openLoginWeb", platform),
     // 手动写入 cookie 登录
@@ -504,6 +591,26 @@ const api = {
       activeServerId: string | null;
     }): Promise<void> => ipcRenderer.invoke("streaming:saveServers", payload),
   },
+  qqmusic: {
+    // 加密落盘 cookie
+    setCookie: (cookie: string) => ipcRenderer.invoke("qqmusic:setCookie", cookie),
+    // 读取并解密 cookie；未登录返回 null
+    getCookie: (() => ipcRenderer.invoke("qqmusic:getCookie")) as () => Promise<string | null>,
+    // 删除凭证文件
+    clearCookie: () => ipcRenderer.invoke("qqmusic:clearCookie"),
+    // 用 cookie 验证登录态并返回资料
+    fetchStatus: () => ipcRenderer.invoke("qqmusic:fetchStatus"),
+  },
+  kugou: {
+    // 加密落盘 cookie
+    setCookie: (cookie: string) => ipcRenderer.invoke("kugou:setCookie", cookie),
+    // 读取并解密 cookie；未登录返回 null
+    getCookie: (() => ipcRenderer.invoke("kugou:getCookie")) as () => Promise<string | null>,
+    // 删除凭证文件
+    clearCookie: () => ipcRenderer.invoke("kugou:clearCookie"),
+    // 用 cookie 验证登录态并返回资料
+    fetchStatus: () => ipcRenderer.invoke("kugou:fetchStatus"),
+  },
   lastfm: {
     // 发起授权
     connect: () => ipcRenderer.invoke("lastfm:connect"),
@@ -544,13 +651,18 @@ const api = {
     startHost: (
       name: string,
       password: string,
+      permissions: ListenTogetherPermissions,
     ): Promise<{ ok: boolean; address: string | null; error?: string }> =>
-      ipcRenderer.invoke("listenTogether:startHost", name, password),
+      ipcRenderer.invoke("listenTogether:startHost", name, password, permissions),
     // 停止主机模式
     stopHost: (): Promise<void> => ipcRenderer.invoke("listenTogether:stopHost"),
-    // 加入会话
-    joinSession: (url: string, password: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke("listenTogether:joinSession", url, password),
+    // 加入会话（可选分享码：提供时自动启动 EasyTier 加入虚拟网络）
+    joinSession: (
+      url: string,
+      password: string,
+      shareCode?: string,
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke("listenTogether:joinSession", url, password, shareCode),
     // 离开会话
     leaveSession: (): Promise<void> => ipcRenderer.invoke("listenTogether:leaveSession"),
     // 开始浏览局域网会话
@@ -577,9 +689,17 @@ const api = {
     // 一次性查询当前已发现的会话
     getDiscoveredSessions: (): Promise<ListenTogetherDiscoveredSession[]> =>
       ipcRenderer.invoke("listenTogether:getDiscoveredSessions"),
+    // 查询 EasyTier 状态（主机模式展示虚拟 IP）
+    getEasyTierStatus: (): Promise<EasyTierStatus> =>
+      ipcRenderer.invoke("listenTogether:getEasyTierStatus"),
     // 主机端：通知主进程队列更新（由渲染端在队列变化时调用）
     notifyQueueUpdate: (queue: Track[], currentIndex: number): void => {
       ipcRenderer.send("listenTogether:notifyQueueUpdate", queue, currentIndex);
+    },
+    // 主机端：通知主进程曲目切换（用于 player:load 之外的场景，例如客户端首次加入后主机已就绪）
+    // 主机端通常由 player.ts 直接调用 handlePlayerEvent 触发广播；本通道作为渲染端冗余兜底
+    notifyTrackChange: (track: Track | null, position: number, state: "playing" | "paused"): void => {
+      ipcRenderer.send("listenTogether:notifyTrackChange", track, position, state);
     },
   },
   update: {
@@ -620,6 +740,31 @@ const api = {
       subscribe<HotkeyActionId>("hotkey:trigger", callback),
     onConflicts: (callback: (conflicts: HotkeyConflict[]) => void) =>
       subscribe<HotkeyConflict[]>("hotkey:conflicts", callback),
+  },
+  unblock: {
+    // 按配置顺序尝试启用的解灰源，返回首个成功的 URL
+    resolve: (match: {
+      keyword: string;
+      songName: string;
+      artist: string;
+    }): Promise<{
+      success: boolean;
+      data: { code: number; url: string | null; from?: SongUnlockServerKey };
+    }> => ipcRenderer.invoke("unblock:resolve", match),
+    // 单源查询（用于设置面板测试）
+    test: (
+      key: SongUnlockServerKey,
+      match: { keyword: string; songName: string; artist: string },
+    ): Promise<{
+      success: boolean;
+      data: { code: number; url: string | null; from?: SongUnlockServerKey };
+    }> => ipcRenderer.invoke("unblock:test", key, match),
+  },
+  audioAnalysis: {
+    // 分析整曲音频特征（BPM / 调式 / LUFS / 人声）
+    analyze: (source: string) => ipcRenderer.invoke("audioAnalysis:analyze", source),
+    // 批量分析多首曲目（顺序执行避免内存占用）
+    analyzeBatch: (sources: string[]) => ipcRenderer.invoke("audioAnalysis:analyzeBatch", sources),
   },
 };
 

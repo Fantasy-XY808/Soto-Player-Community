@@ -16,14 +16,26 @@
     "finish": "完成",
     "footer": "可随时在「设置」中调整本次未配置的内容",
     "welcome": {
-      "title": "欢迎使用 Soto-Player Community",
+      "title": "欢迎使用 Soto Player-Community",
       "subtitle": "一个现代化的桌面音乐播放器，完成几步设置即可开始享用",
       "start": "开始设置",
       "features": {
-        "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
-        "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
-        "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词" }
+        "local": {
+          "title": "本地音乐库",
+          "desc": "扫描本地目录，自动整理音乐库"
+        },
+        "quality": {
+          "title": "无损音质",
+          "desc": "原生音频引擎，支持多种无损格式"
+        },
+        "streaming": {
+          "title": "流媒体服务器",
+          "desc": "Subsonic / Jellyfin / Emby 等"
+        },
+        "lyrics": {
+          "title": "丰富歌词体验",
+          "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词"
+        }
       }
     },
     "agreement": {
@@ -35,11 +47,11 @@
     },
     "library": {
       "title": "本地音乐库",
-      "subtitle": "添加要扫描的音乐文件夹，Soto-Player Community 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
+      "subtitle": "添加要扫描的音乐文件夹，Soto Player-Community 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
     },
     "streaming": {
       "title": "流媒体服务器",
-      "subtitle": "Soto-Player Community 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
+      "subtitle": "Soto Player-Community 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
       "hint": "完成引导后，前往「设置 → 媒体源配置 → 流媒体管理」即可添加服务器并测试连接",
       "servers": {
         "subsonic": "Subsonic 兼容",
@@ -55,9 +67,33 @@
       "modeLabel": "主题模式",
       "colorLabel": "主色调"
     },
+    "effects": {
+      "title": "播放界面特效",
+      "subtitle": "选择预设或逐项开启播放界面的视觉特效。低端设备建议选择性能模式。",
+      "performanceMode": "性能模式",
+      "performanceDesc": "仅开启流体背景 + 视差倾斜 + 封面呼吸，适合老旧设备",
+      "fullMode": "完整模式",
+      "fullDesc": "全部特效开启：流体 / 雪花 / 雾气 / 雨滴 / 频谱 / 视差 / 呼吸",
+      "enableAll": "全部开启",
+      "disableAll": "全部关闭",
+      "fluid": "流体背景",
+      "fluidDesc": "封面色调驱动的流体动画背景",
+      "snow": "雪花背景",
+      "snowDesc": "飘落雪花叠加层",
+      "fog": "雾气背景",
+      "fogDesc": "缓慢流动的雾气层",
+      "raindrop": "雨滴背景",
+      "raindropDesc": "玻璃窗雨滴效果",
+      "spectrum": "音乐频谱",
+      "spectrumDesc": "底部 + 环绕封面的频谱可视化",
+      "parallax": "封面视差",
+      "parallaxDesc": "鼠标移动时封面 3D 倾斜",
+      "breathing": "封面呼吸",
+      "breathingDesc": "低频驱动的封面节拍缩放"
+    },
     "migration": {
       "title": "数据迁移",
-      "subtitle": "检测到旧的 SPlayer-Next 用户数据，是否迁移到当前 Soto-Player Community？",
+      "subtitle": "检测到旧的 SPlayer-Next 用户数据，是否迁移到当前 Soto Player-Community？",
       "warning": "迁移将覆盖当前已有的设置、曲库、缓存与插件数据，请慎重选择。可在「设置 → 通用 → 数据迁移」中随时再次执行",
       "itemConfig": "配置文件（设置、流媒体凭证、Last.fm 凭证）",
       "itemDatabase": "音乐库数据库（本地曲库索引与播放历史）",
@@ -72,7 +108,7 @@
     },
     "hotkeys": {
       "title": "快捷键",
-      "subtitle": "Soto-Player Community 内置了完整的播放控制快捷键，需要时随时调用",
+      "subtitle": "Soto Player-Community 内置了完整的播放控制快捷键，需要时随时调用",
       "tips": {
         "global": {
           "title": "全局快捷键",
@@ -101,6 +137,7 @@
     "loading": "加载中",
     "noData": "暂无数据",
     "noMore": "没有更多了 ~",
+    "unavailable": "暂不可用",
     "refreshCache": "刷新缓存",
     "copied": "已复制",
     "copyFailed": "复制失败",
@@ -213,7 +250,8 @@
       "quick": "快捷",
       "history": "搜索历史",
       "hot": "热搜榜"
-    }
+    },
+    "automix": "Automix"
   },
   "home": {
     "greetingLine": "{greeting}，{name}",
@@ -354,7 +392,42 @@
     "platformQQMusic": "QQ音乐",
     "platformKugou": "酷狗音乐",
     "platformQishui": "汽水音乐",
-    "platformComingSoon": "{platform} 账户登录功能开发中，敬请期待"
+    "platformComingSoon": "{platform} 账户登录功能开发中，敬请期待",
+    "cookieInvalidQq": "Cookie 无效，必须包含 uin 与 qm_keyst",
+    "cookieInvalidKugou": "Cookie 无效，必须包含 kg_mid 与 vip_token",
+    "cookieHintQq": "只需 uin 与 qm_keyst 字段，例如 uin=o1234567890; qm_keyst=xxxx;",
+    "cookieHintKugou": "只需 kg_mid 与 vip_token 字段，例如 kg_mid=xxxx; vip_token=yyyy;",
+    "cookiePlaceholderQq": "粘贴 Cookie，至少需要 uin=xxx; qm_keyst=xxx;",
+    "cookiePlaceholderKugou": "粘贴 Cookie，至少需要 kg_mid=xxx; vip_token=xxx;",
+    "cookieExpiredHint": "Cookie 可能已失效，请重新登录",
+    "qishuiPluginHint": "汽水音乐需要第三方插件支持，请前往 设置 → 插件"
+  },
+  "account": {
+    "qq": {
+      "title": "QQ音乐账户",
+      "description": "登录后可播 VIP 与受限歌曲"
+    },
+    "kugou": {
+      "title": "酷狗音乐账户",
+      "description": "登录后可播 VIP 与受限歌曲"
+    },
+    "qishui": {
+      "title": "汽水音乐",
+      "description": "汽水音乐需第三方插件支持，点击下方打开插件设置",
+      "openPlugins": "打开插件设置",
+      "installed": "插件已就绪"
+    },
+    "switcher": {
+      "title": "账户切换",
+      "subtitle": "已登录账户一览",
+      "refresh": "刷新",
+      "noLogin": "未登录",
+      "vip": "VIP",
+      "playlists": "歌单",
+      "likedSongs": "红心",
+      "empty": "尚未登录任何平台账户",
+      "openSettings": "前往设置"
+    }
   },
   "search": {
     "title": "搜索",
@@ -367,7 +440,8 @@
       "songs": "单曲",
       "albums": "专辑",
       "artists": "歌手",
-      "playlists": "歌单"
+      "playlists": "歌单",
+      "mvs": "MV"
     }
   },
   "streaming": {
@@ -451,6 +525,7 @@
       "hint": "正值为歌词提前，单位毫秒"
     },
     "lyricCredit": "歌词制作",
+    "effectAutoDowngradeToast": "检测到帧率偏低，已自动关闭：{effects}",
     "copyLyric": {
       "title": "复制歌词",
       "contentLabel": "要复制的内容",
@@ -515,7 +590,13 @@
     "reply": "回复",
     "hotLoading": "正在加载热评…",
     "hotLoadFailed": "热评加载失败，可能是网络或风控所致",
-    "retry": "重试"
+    "retry": "重试",
+    "expandReplies": "展开 {count} 条回复",
+    "collapseReplies": "收起回复",
+    "loadingReplies": "正在加载回复…",
+    "repliesFailed": "回复加载失败",
+    "loadMoreHot": "加载更多热评",
+    "moreHot": "还有更多热评"
   },
   "songList": {
     "title": "标题",
@@ -554,6 +635,7 @@
       "download": "下载歌曲",
       "deleteFile": "删除文件",
       "searchSame": "同名搜索",
+      "viewMv": "查看 MV",
       "more": "更多操作",
       "copyTitle": "复制歌曲名称",
       "copyId": "复制歌曲 ID",
@@ -575,7 +657,8 @@
       "fileConfirm": "确认从磁盘删除 {count} 个文件？此操作不可撤销"
     },
     "toast": {
-      "addedToNext": "已添加到下一曲播放"
+      "addedToNext": "已添加到下一曲播放",
+      "noMv": "该歌曲暂无 MV"
     }
   },
   "quality": {
@@ -756,7 +839,8 @@
       "integrations": "集成与服务",
       "hotkeys": "快捷键",
       "plugins": "插件",
-      "about": "关于"
+      "about": "关于",
+      "automix": "Automix"
     },
     "section": {
       "network": "网络代理",
@@ -794,13 +878,19 @@
       "audioSuperRes": "音频超分",
       "hotkeys": "快捷键",
       "musicSpectrum": "音乐频谱",
+      "controlEnhance": "控件可见性增强",
       "discord": "Discord RPC",
       "lastfm": "Last.fm",
       "externalApi": "外部 API",
       "listenTogether": "一起听",
       "systemConfig": "系统配置",
+      "proxy": "代理",
       "pluginsList": "已安装插件",
       "streaming": "流媒体管理",
+      "qqAccount": "QQ 音乐账户",
+      "kugouAccount": "酷狗音乐账户",
+      "qishuiPlugin": "汽水音乐（插件）",
+      "songUnlockServer": "解灰音源",
       "songCache": "歌曲缓存",
       "cache": "缓存",
       "database": "数据库",
@@ -809,7 +899,10 @@
       "downloadTags": "写入内容",
       "backupReset": "备份与重置",
       "migration": "数据迁移",
-      "debug": "调试"
+      "debug": "调试",
+      "automixMain": "自动混音",
+      "automixTransition": "切换过渡",
+      "automixAnalysis": "音频分析"
     },
     "about": {
       "checkUpdate": "检查更新",
@@ -817,9 +910,10 @@
       "newVersion": "发现新版本",
       "openLogs": "打开日志",
       "officialSite": "官方网站",
+      "qqGroup": "QQ 群 1043061896",
       "showMore": "更多贡献者",
       "collapse": "收起",
-      "description": "水芸音乐播放器 — 基于 SPlayer-Next 二次开发的社区分支，沿用上游原生音频引擎。",
+      "description": "水芸音乐播放器 — 基于 SPlayer-Next 二次开发的社区分支，沿用上游原生音频引擎；一起听基于 EasyTier 实现跨局域网 P2P 内网穿透。",
       "visualInspiration": "视觉灵感部分参考 BetterLyrics 等社区开源项目",
       "role": {
         "author": "作者"
@@ -867,6 +961,129 @@
       "cpu": "CPU",
       "gpu": "GPU（回退 CPU）",
       "npu": "NPU（回退 CPU）"
+    },
+    "audioSuperResolutionParams": {
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过超分处理，用于对比效果"
+      },
+      "hpFreq": {
+        "label": "高通截止频率"
+      },
+      "hpQ": {
+        "label": "高通 Q 值"
+      },
+      "drive": {
+        "label": "一次谐波激励"
+      },
+      "h2Drive": {
+        "label": "二次谐波激励"
+      },
+      "h2Mix": {
+        "label": "二次谐波混合"
+      },
+      "wetMix": {
+        "label": "湿信号混合"
+      },
+      "inputLimit": {
+        "label": "输入限幅"
+      }
+    },
+    "bassEnhancer": {
+      "label": "低音增强",
+      "description": "2 阶 low-shelf 滤波 + tanh 软饱和，提升低频冲击力",
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过低音增强处理，用于对比效果"
+      },
+      "freq": {
+        "label": "截止频率"
+      },
+      "gainDb": {
+        "label": "增益"
+      },
+      "q": {
+        "label": "Q 值"
+      }
+    },
+    "stereoWidener": {
+      "label": "立体声展宽",
+      "description": "Mid-Side 处理：>1 展宽立体声场，<1 收窄",
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过展宽处理，用于对比效果"
+      },
+      "width": {
+        "label": "展宽系数"
+      }
+    },
+    "loudnessNormalizer": {
+      "label": "响度归一化",
+      "description": "500ms 滑动窗口 RMS 估算，attack/release 平滑；用于多 DSP 串联后防止削波",
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过响度归一化，用于对比效果"
+      },
+      "targetLufs": {
+        "label": "目标响度"
+      },
+      "maxGainDb": {
+        "label": "最大增益"
+      }
+    },
+    "neuralUpsample": {
+      "label": "神经网络上采样",
+      "description": "框架就绪 + 算法兜底：未加载 ONNX 模型时直通，不影响音频信号；加载模型后实现真实超分",
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过神经网络处理，用于对比效果"
+      },
+      "backend": {
+        "label": "推理后端",
+        "description": "Fallback=直通（兜底），ONNX=加载模型后真实推理"
+      },
+      "modelPath": {
+        "label": "ONNX 模型路径",
+        "description": "选择本地 ONNX 模型文件，框架阶段仅校验文件存在性",
+        "placeholder": "请输入或选择 .onnx 模型文件路径",
+        "load": "加载模型",
+        "empty": "模型路径不能为空",
+        "loaded": "模型已加载",
+        "notLoaded": "模型未加载（当前直通）"
+      },
+      "inputGainDb": {
+        "label": "输入增益"
+      },
+      "wetMix": {
+        "label": "湿信号混合"
+      }
+    },
+    "neuralUpsampleBackend": {
+      "fallback": "Fallback 直通",
+      "onnx": "ONNX 推理"
+    },
+    "spatialAudio": {
+      "label": "空间音频",
+      "description": "组合预设：开启时同步启用立体声展宽 + 低音增强 + 高频超分，制造震撼包裹感",
+      "bypass": {
+        "label": "A/B 对比",
+        "description": "临时跳过空间音频预设，回落到各子项独立配置"
+      },
+      "width": {
+        "label": "立体声展宽"
+      },
+      "bassGainDb": {
+        "label": "低音增益"
+      },
+      "bassFreq": {
+        "label": "低音截止频率"
+      },
+      "superResDrive": {
+        "label": "超分驱动"
+      },
+      "superResWetMix": {
+        "label": "超分湿信号"
+      }
     },
     "songLevel": {
       "label": "在线歌曲音质",
@@ -1060,6 +1277,10 @@
       "label": "自动居中封面",
       "description": "无歌词时自动居中封面并隐藏歌词区域"
     },
+    "mirrorLayout": {
+      "label": "镜像布局",
+      "description": "左右翻转封面与歌词位置（封面居中状态不生效）"
+    },
     "showPureMusicComment": {
       "label": "纯音乐热评",
       "description": "纯音乐时在歌词区展示一条随机热评（与「自动居中封面」互斥，二者均开启时热评优先）"
@@ -1114,6 +1335,10 @@
       "label": "雨滴背景层",
       "description": "在背景上叠加倾斜雨滴下落效果"
     },
+    "enableEffectAutoDowngrade": {
+      "label": "特效自动降级",
+      "description": "连续低帧率时自动关闭流体/雾气背景与封面景深，保持播放流畅；手动重开后本会话不再自动关闭"
+    },
     "enableParallaxTilt": {
       "label": "封面视差倾斜",
       "description": "鼠标移动时封面跟随轻微倾斜，产生3D视差效果"
@@ -1121,6 +1346,56 @@
     "enableCoverBreathing": {
       "label": "封面呼吸效果",
       "description": "播放时封面轻微缩放脉动"
+    },
+    "controlEnhanceMode": {
+      "label": "控件可见性增强",
+      "description": "浅色背景下控件看不清时启用",
+      "none": "关闭",
+      "background": "背景衬底",
+      "outline": "描边",
+      "auto": "智能推演"
+    },
+    "controlBackgroundStyle": {
+      "label": "背景材质",
+      "description": "控件背景的材质效果",
+      "blur": "模糊",
+      "acrylic": "亚克力",
+      "mica": "云母"
+    },
+    "controlOutlineStyle": {
+      "label": "描边样式",
+      "description": "控件描边的视觉效果",
+      "thin": "细描边",
+      "shadow": "投影",
+      "glow": "辉光"
+    },
+    "audioSuperResolution": {
+      "label": "音频超分辨率",
+      "description": "提升音频采样率，增强高频细节"
+    },
+    "streamingServerList": {
+      "label": "流媒体服务器",
+      "description": "管理 Subsonic / Jellyfin / Emby 服务器"
+    },
+    "qqAccountCard": {
+      "label": "QQ 音乐账户",
+      "description": "登录 QQ 音乐以获取更高音质"
+    },
+    "kugouAccountCard": {
+      "label": "酷狗音乐账户",
+      "description": "登录酷狗音乐以获取更高音质"
+    },
+    "qishuiPluginHint": {
+      "label": "汽水音乐（插件）",
+      "description": "通过插件接入汽水音乐音源"
+    },
+    "lastfmAccount": {
+      "label": "Last.fm 账户",
+      "description": "连接 Last.fm 账户以同步听歌记录"
+    },
+    "migrationPanel": {
+      "label": "数据迁移",
+      "description": "从旧版本迁移数据到新版本"
     },
     "enableFanLyrics": {
       "label": "扇形歌词",
@@ -1154,6 +1429,10 @@
       "label": "底框背景",
       "description": "为每行歌词添加半透明圆角底框"
     },
+    "fanLyricsAlwaysShowActiveBg": {
+      "label": "激活行常显底框",
+      "description": "当前播放行始终显示底框，无需鼠标悬停"
+    },
     "fanLyricsEnableGlow": {
       "label": "长音节光辉",
       "description": "超过 1 秒的音节添加光辉效果，周围字符也有轻微光晕"
@@ -1176,6 +1455,36 @@
       "bar": "柱状",
       "curve": "曲线",
       "around": "环绕封面"
+    },
+    "spectrumBreathing": {
+      "label": "频谱心跳",
+      "description": "低频驱动频谱整体等比放大，营造节拍呼吸感（BetterLyrics 风格）"
+    },
+    "spectrumBreathingIntensity": {
+      "label": "心跳强度",
+      "description": "频谱最大放大倍率，100 时最大放大至 1.8 倍"
+    },
+    "spectrumBrightness": {
+      "label": "频谱亮度",
+      "description": "频谱固定亮度,与智能模式叠加生效"
+    },
+    "spectrumSmartDim": {
+      "label": "智能调暗",
+      "description": "鼠标悬浮播放界面控件时,频谱自动变暗变灰以突出控件"
+    },
+    "fftEqualLoudness": {
+      "label": "等响度补偿",
+      "description": "高频段视觉强化(BetterLyrics 风格:20Hz gain=1.0 → 20kHz gain=12.0 对数插值),让高频泛音更易显现"
+    },
+    "spectrumColorMode": {
+      "label": "频谱颜色",
+      "description": "跟随封面色或自定义颜色",
+      "cover": "跟随封面",
+      "custom": "自定义"
+    },
+    "spectrumCustomColor": {
+      "label": "自定义颜色",
+      "description": "频谱自定义颜色"
     },
     "showTranslation": {
       "label": "显示翻译",
@@ -1437,6 +1746,26 @@
       "label": "封面翻转动画",
       "description": "切歌时封面以 3D 翻转效果过渡"
     },
+    "dynamicIslandMotionBlur": {
+      "label": "运动模糊",
+      "description": "窗口缩放/展开时根据速度施加模糊，让动画更顺滑"
+    },
+    "dynamicIslandAutoHide": {
+      "label": "自动隐藏",
+      "description": "无交互一段时间后塌缩为隐藏小坨"
+    },
+    "dynamicIslandAutoHideDelay": {
+      "label": "自动隐藏延迟",
+      "description": "无交互多久后触发隐藏"
+    },
+    "dynamicIslandSuppressFullscreen": {
+      "label": "全屏时隐藏",
+      "description": "前台窗口全屏时自动隐藏灵动岛，避免遮挡游戏/视频播放器"
+    },
+    "dynamicIslandAutoStart": {
+      "label": "开机自启",
+      "description": "跟随系统开机启动 SPlayer（控制整个应用，非仅灵动岛）"
+    },
     "taskbarLyricEnabled": {
       "label": "开启任务栏歌词",
       "description": "将歌词嵌入 Windows 任务栏中显示"
@@ -1515,6 +1844,14 @@
       "solid": "纯色",
       "animation": "流体"
     },
+    "playerBgPreset": {
+      "label": "背景风格",
+      "description": "选择流体背景的预设风格，选择「自定义」可手动调节所有参数",
+      "soft": "柔和",
+      "vivid": "鲜艳",
+      "intense": "震撼",
+      "custom": "自定义"
+    },
     "playerBgFlowSpeed": {
       "label": "流动速度",
       "description": "流体背景的动画流动速度"
@@ -1534,6 +1871,18 @@
     "playerBgBeat": {
       "label": "背景跳动",
       "description": "使流体背景随音乐低频节拍产生脉动效果"
+    },
+    "playerBgBrightness": {
+      "label": "亮度",
+      "description": "流体背景的显示亮度，1.0 为原始亮度"
+    },
+    "playerBgSaturation": {
+      "label": "饱和度",
+      "description": "流体背景的色彩饱和度，1.0 为原始饱和度"
+    },
+    "playerBgContrast": {
+      "label": "对比度",
+      "description": "流体背景的明暗对比度，1.0 为原始对比度"
     },
     "coverLayout": {
       "label": "封面布局",
@@ -1612,9 +1961,19 @@
       "label": "歌单显示封面",
       "description": "侧边栏的歌单项以歌单封面替代默认图标"
     },
-    "coverDepthOfField": {
-      "label": "封面景深",
-      "description": "全屏播放器背景叠加铺满的模糊封面副本，低频越强模糊越深"
+    "coverParallax": {
+      "label": "全屏封面视差",
+      "description": "全屏封面布局下封面跟随鼠标移动，营造视差效果"
+    },
+    "coverParallaxIntensity": {
+      "label": "视差强度",
+      "description": "调整封面跟随鼠标的位移与倾斜幅度"
+    },
+    "coverParallaxMode": {
+      "label": "视差方式",
+      "description": "平面：以二维方式平移封面；多维：实验性功能，以多维度透视倾斜展现视差",
+      "plane": "平面",
+      "multi": "多维"
     },
     "showQualitySwitch": {
       "label": "显示快捷音质切换",
@@ -1736,6 +2095,50 @@
       "label": "通过 Orpheus 协议唤起本应用",
       "description": "该协议通常用于官方网页端唤起官方客户端，启用后可能导致官方客户端无法被唤起"
     },
+    "preventSleep": {
+      "label": "播放时阻止系统休眠",
+      "description": "仅在播放中生效，暂停或停止后自动解除阻塞"
+    },
+    "proxyProtocol": {
+      "label": "代理协议",
+      "description": "用于网易云音源请求与原生音频引擎的 HTTP 拉流",
+      "protocol": {
+        "off": "直连",
+        "http": "HTTP",
+        "https": "HTTPS",
+        "socks5": "SOCKS5"
+      }
+    },
+    "proxyHost": {
+      "label": "主机",
+      "description": "代理服务器主机名或 IP 地址"
+    },
+    "proxyPort": {
+      "label": "端口",
+      "description": "代理服务器监听端口（1–65535）"
+    },
+    "proxyUsername": {
+      "label": "用户名",
+      "description": "需要鉴权的代理服务器用户名，无需鉴权时留空"
+    },
+    "proxyPassword": {
+      "label": "密码",
+      "description": "需要鉴权的代理服务器密码，无需鉴权时留空"
+    },
+    "songUnlockServer": {
+      "netease": {
+        "name": "GD音乐台",
+        "desc": "聚合多方音源，命中率较高；走 music-api.gdstudio.xyz 公开 API"
+      },
+      "kuwo": {
+        "name": "酷我音乐",
+        "desc": "走酷我搜索 + mobi 接口；DES 加密参数"
+      },
+      "bodian": {
+        "name": "波点音乐",
+        "desc": "走酷我搜索 + bd-api 取流；需 SHA-256+MD5 签名"
+      }
+    },
     "streamingEnabled": {
       "label": "启用流媒体",
       "description": "关闭后将隐藏侧边栏的流媒体入口"
@@ -1806,7 +2209,7 @@
     },
     "listenTogether": {
       "panelTitle": "运行状态",
-      "panelHint": "在「一起听」页面创建或加入会话；公网访问需自行配置内网穿透",
+      "panelHint": "在「一起听」页面创建或加入会话；跨局域网访问基于内嵌 EasyTier 自动建立虚拟网络",
       "runningAsHost": "当前作为主机：{address}",
       "runningAsClient": "当前作为客户端：{url}",
       "idle": "未启用",
@@ -1867,7 +2270,7 @@
     },
     "migration": {
       "title": "从 SPlayer-Next 迁移数据",
-      "description": "将旧版 SPlayer-Next 的配置、曲库、缓存与插件数据迁移到当前 Soto-Player Community",
+      "description": "将旧版 SPlayer-Next 的配置、曲库、缓存与插件数据迁移到当前 Soto Player-Community",
       "noLegacy": "未检测到 SPlayer-Next 用户数据，无需迁移",
       "start": "开始迁移",
       "confirmTitle": "确认迁移数据？",
@@ -2055,6 +2458,53 @@
       "button": "清空全部",
       "confirmTitle": "清空全部数据库缓存？",
       "confirmDesc": "将删除上方全部数据库缓存，操作不可恢复"
+    },
+    "automixEnabled": {
+      "label": "启用 Automix",
+      "description": "在曲目临近结束时自动根据 BPM 与调式挑下一首，平滑衔接"
+    },
+    "automixStrategy": {
+      "label": "选曲策略",
+      "description": "BPM+调式（推荐）/ 仅 BPM / 仅调式 / 随机",
+      "strategy": {
+        "bpmKey": "BPM + 调式",
+        "bpm": "仅 BPM",
+        "key": "仅调式",
+        "random": "随机"
+      }
+    },
+    "automixBpmTolerance": {
+      "label": "BPM 容差",
+      "description": "候选曲 BPM 与当前曲相差多少以内可被选中；0 表示不限制"
+    },
+    "automixKeyMatchMode": {
+      "label": "调式匹配",
+      "description": "Camelot Wheel 兼容模式；严格模式仅允许同编号同字母",
+      "mode": {
+        "off": "关闭",
+        "camelot": "Camelot Wheel",
+        "strict": "严格匹配"
+      }
+    },
+    "automixCrossfadeEnabled": {
+      "label": "渐入渐出切换",
+      "description": "切换时音量渐弱至 0 后切歌，再渐回原音量"
+    },
+    "automixCrossfadeMs": {
+      "label": "过渡时长",
+      "description": "提前多少毫秒开始触发切换；越长过渡越平滑"
+    },
+    "automixCandidatePoolSize": {
+      "label": "候选池大小",
+      "description": "从当前曲后多少首中挑选；越大匹配越优但分析耗时越长"
+    },
+    "automixAutoAnalyze": {
+      "label": "自动分析",
+      "description": "未分析过的曲目自动调用音频分析；关闭后仅用已分析数据"
+    },
+    "automixAutoRecommend": {
+      "label": "自动推荐（即将上线）",
+      "description": "候选池耗尽时基于相似度自动推荐新曲目"
     }
   },
   "collection": {
@@ -2097,7 +2547,16 @@
   "radio": {
     "title": "电台",
     "subtitle": "精选播客与电台，听见更多声音",
-    "empty": "暂无电台内容"
+    "empty": "暂无电台内容",
+    "detail": {
+      "loading": "加载中…",
+      "errorTitle": "加载失败",
+      "notFound": "未找到该电台",
+      "badge": "电台",
+      "programCount": "共 {count} 期节目",
+      "subCount": "{count} 订阅",
+      "emptyPrograms": "暂无节目"
+    }
   },
   "mv": {
     "title": "MV",
@@ -2110,13 +2569,48 @@
       "western": "欧美",
       "japan": "日本",
       "korea": "韩国"
+    },
+    "detail": {
+      "loading": "加载中…",
+      "errorTitle": "加载失败",
+      "notFound": "未找到该 MV",
+      "noUrl": "暂无可播放地址，可能需要登录或开通 VIP"
+    }
+  },
+  "video": {
+    "title": "视频",
+    "loading": "加载中…",
+    "errorTitle": "加载失败",
+    "notFound": "未找到该视频",
+    "noUrl": "暂无可播放地址，可能需要登录或开通 VIP",
+    "playing": "播放中",
+    "paused": "已暂停",
+    "relatedVideos": "相关视频",
+    "quality": {
+      "high": "1080P",
+      "medium": "720P",
+      "low": "480P",
+      "standard": "240P"
+    },
+    "actions": {
+      "like": "点赞",
+      "collect": "收藏",
+      "share": "分享"
+    },
+    "toast": {
+      "liked": "已点赞",
+      "unliked": "已取消点赞",
+      "collected": "已加入收藏",
+      "uncollected": "已取消收藏"
     }
   },
   "events": {
     "title": "动态",
     "subtitle": "你关注的歌手朋友的最新动态",
     "empty": "暂无动态",
-    "needLogin": "登录后查看关注动态"
+    "needLogin": "登录后查看关注动态",
+    "detailTitle": "动态详情",
+    "notFound": "未找到该动态"
   },
   "album": {
     "label": "专辑"
@@ -2169,7 +2663,7 @@
   },
   "listenTogether": {
     "title": "一起听",
-    "subtitle": "与好友同步收听同一首歌",
+    "subtitle": "与好友同步收听同一首歌（基于 EasyTier P2P 内网穿透）",
     "role": {
       "idle": "未连接",
       "host": "主机",
@@ -2193,22 +2687,37 @@
       "passwordLabel": "会话口令",
       "passwordPlaceholder": "客户端加入需输入此口令",
       "passwordHint": "口令为空表示无需口令；建议设置口令避免陌生人加入",
+      "permissionsLabel": "房客权限",
+      "allowClientPause": "允许暂停/播放",
+      "allowClientSkip": "允许切歌",
+      "allowClientEditQueue": "允许编辑播放列表",
       "portLabel": "监听端口",
       "portHint": "客户端连接时使用同一端口；如端口冲突可在此调整",
-      "tunnelHint": "局域网内可被自动发现；公网访问需自行配置内网穿透（如 frp / ngrok / zerotier），将公网流量转发到本机 IP 与端口",
+      "tunnelHint": "主机启动后自动生成 6 位分享码，好友在同局域网或跨网均可加入；跨网时通过内嵌 EasyTier SOCKS5 代理建立虚拟通道，无需管理员权限",
+      "lanOnlyLabel": "仅限同局域网",
+      "lanOnlyHint": "开启后仅允许同局域网好友加入，不启动 EasyTier 跨网穿透；关闭则支持跨网加入",
+      "easyTierTitle": "EasyTier 跨网穿透",
+      "easyTierHint": "已内嵌 EasyTier 二进制，无需额外安装；两端均用 --no-tun 模式，客户端经 SOCKS5 代理连主机虚拟 IP，实现跨网同步听歌，无需管理员权限",
+      "easyTierVirtualIp": "虚拟 IP：{ip}",
+      "easyTierWaitingIp": "等待分配虚拟 IP…",
+      "easyTierNotStarted": "尚未启动",
+      "shareCodeLabel": "分享码",
+      "shareCodeCopied": "邀请信息已复制",
       "start": "开始",
       "started": "主机已启动：{address}",
       "startFailed": "主机启动失败",
       "stopped": "已停止主机",
       "addressLabel": "会话地址",
-      "addressHint": "将此地址告诉好友；如需公网访问请使用你的穿透地址",
-      "copy": "复制",
+      "addressHint": "将此地址与分享码告诉好友；同局域网下仅需地址，跨局域网需同时提供分享码",
+      "copy": "复制邀请",
       "copied": "地址已复制",
       "copyFailed": "复制失败",
+      "inviteText": "打开 Soto Player-Community ，和我一起听吧！\n房间地址：{address}\n分享码：{code}",
       "stop": "停止",
       "membersTitle": "已连接成员",
       "membersCount": "共 {count} 人",
-      "membersEmpty": "暂无成员加入"
+      "membersEmpty": "暂无成员加入",
+      "currentTrackLabel": "当前曲目"
     },
     "join": {
       "cardTitle": "加入会话",
@@ -2221,12 +2730,16 @@
       "discoveredLabel": "局域网自动发现",
       "discoveredEmpty": "未发现会话，可手动输入地址",
       "locked": "口令",
+      "open": "开放",
       "urlLabel": "主机地址",
       "urlPlaceholder": "host:port 或 ws://host:port 或 wss://host:port",
       "urlHint": "支持局域网地址与公网穿透地址；wss:// 用于启用 TLS 的穿透",
       "urlRequired": "请输入主机地址",
       "passwordLabel": "会话口令",
       "passwordPlaceholder": "如主机设置了口令则填写",
+      "shareCodeLabel": "分享码",
+      "shareCodePlaceholder": "主机提供的 6 位分享码（跨局域网时必填）",
+      "shareCodeHint": "填入分享码后会自动通过 EasyTier 加入虚拟网络，跨局域网也能连接",
       "join": "加入",
       "joined": "已加入会话",
       "failed": "加入失败",
@@ -2234,7 +2747,41 @@
       "leave": "离开",
       "connectedTo": "已连接到",
       "hostUrl": "主机地址",
-      "latency": "延迟"
+      "latency": "延迟",
+      "membersTitle": "房客成员",
+      "membersLoading": "正在等待主机同步成员列表…",
+      "pauseDisabled": "主机已禁用暂停/播放",
+      "skipDisabled": "主机已禁用切歌",
+      "editQueueDisabled": "主机已禁用编辑播放列表",
+      "currentTrackLabel": "当前曲目"
     }
+  },
+  "automix": {
+    "title": "Automix 自动混音",
+    "subtitle": "基于 BPM 与调式的智能接歌",
+    "notEnabled": "Automix 未启用",
+    "notEnabledHint": "在设置 → Automix 中开启后即可自动接歌",
+    "goSettings": "前往设置",
+    "currentTrack": "当前曲目",
+    "noCurrent": "未在播放",
+    "bpm": "BPM",
+    "key": "调式",
+    "lufs": "LUFS",
+    "vocals": "人声",
+    "yes": "是",
+    "no": "否",
+    "unknown": "未知",
+    "lastPick": "上次选曲",
+    "noPick": "尚未触发过选曲",
+    "preview": "试挑下一首",
+    "previewing": "挑选中...",
+    "pool": "候选池",
+    "poolEmpty": "候选池为空",
+    "prefetch": "预分析队列",
+    "prefetching": "分析中 {done}/{total}",
+    "prefetchDone": "分析完成",
+    "reason": "理由",
+    "active": "运行中",
+    "inactive": "已停止"
   }
 }

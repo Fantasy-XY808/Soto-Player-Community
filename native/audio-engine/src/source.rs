@@ -5,9 +5,13 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use rodio::Source;
 
+use crate::bass_enhancer::BassEnhancer;
 use crate::equalizer::Equalizer;
 use crate::fft::FftAnalyzer;
+use crate::loudness_normalizer::LoudnessNormalizer;
+use crate::neural_upsample::NeuralUpsample;
 use crate::shared::Shared;
+use crate::stereo_widener::StereoWidener;
 use crate::super_resolution::SuperResolution;
 use crate::tempo::StretchProcessor;
 
@@ -21,8 +25,20 @@ pub struct DecoderSource {
     /// 跨曲目共享的变速变调处理器，load/seek 时通过 Arc::clone 传入
     tempo: Arc<Mutex<StretchProcessor>>,
     /// 跨曲目共享的音频超分处理器，load/seek 时通过 Arc::clone 传入
-    /// 关闭时零开销 early return；DSP 链位置：EQ 之后、tempo 之前
+    /// 关闭时零开销 early return；DSP 链位置：EQ 之后、bass_enhancer 之前
     super_res: Arc<SuperResolution>,
+    /// 跨曲目共享的低音增强处理器
+    /// DSP 链位置：super_res 之后、stereo_widener 之前
+    bass_enhancer: Arc<BassEnhancer>,
+    /// 跨曲目共享的立体声展宽处理器
+    /// DSP 链位置：bass_enhancer 之后、loudness_normalizer 之前
+    stereo_widener: Arc<StereoWidener>,
+    /// 跨曲目共享的响度归一化处理器
+    /// DSP 链位置：stereo_widener 之后、tempo 之前；用于多 DSP 串联后防止削波
+    loudness_normalizer: Arc<LoudnessNormalizer>,
+    /// 跨曲目共享的神经网络上采样处理器
+    /// DSP 链位置：loudness_normalizer 之后、tempo 之前；当前框架阶段（无模型时直通）
+    neural_upsample: Arc<NeuralUpsample>,
     /// 本地缓冲，减少锁竞争
     local_buffer: VecDeque<f32>,
     /// stretch 输出复用缓冲（避免每帧分配）
@@ -38,6 +54,10 @@ impl DecoderSource {
         equalizer: Arc<Mutex<Equalizer>>,
         tempo: Arc<Mutex<StretchProcessor>>,
         super_res: Arc<SuperResolution>,
+        bass_enhancer: Arc<BassEnhancer>,
+        stereo_widener: Arc<StereoWidener>,
+        loudness_normalizer: Arc<LoudnessNormalizer>,
+        neural_upsample: Arc<NeuralUpsample>,
         sample_rate: u32,
         channels: u16,
     ) -> Self {
@@ -47,6 +67,10 @@ impl DecoderSource {
             equalizer,
             tempo,
             super_res,
+            bass_enhancer,
+            stereo_widener,
+            loudness_normalizer,
+            neural_upsample,
             local_buffer: VecDeque::new(),
             tempo_scratch: Vec::new(),
             sample_rate,
@@ -80,8 +104,16 @@ impl Iterator for DecoderSource {
                         .lock()
                         .process_interleaved_stereo(&mut samples);
                     // 超分（高频激励器）：关闭时 early return，开启时按声道应用
-                    // 高通 + cubic soft clip + 湿混合；位置在 EQ 之后、tempo 之前
+                    // 高通 + cubic soft clip + 湿混合；DSP 链第 2 级（EQ 之后）
                     self.super_res.process_interleaved_stereo(&mut samples);
+                    // 低音增强：low-shelf + 软饱和；DSP 链第 3 级（super_res 之后）
+                    self.bass_enhancer.process_interleaved_stereo(&mut samples);
+                    // 立体声展宽：Mid-Side 处理；DSP 链第 4 级（bass_enhancer 之后）
+                    self.stereo_widener.process_interleaved_stereo(&mut samples);
+                    // 响度归一化：滑动窗口 RMS + 增益调整；DSP 链第 5 级（stereo_widener 之后、neural_upsample 之前）
+                    self.loudness_normalizer.process_interleaved_stereo(&mut samples);
+                    // 神经网络上采样：框架阶段无模型时直通；DSP 链第 6 级（loudness_normalizer 之后、tempo 之前）
+                    self.neural_upsample.process_interleaved_stereo(&mut samples);
                     // 源时间长度（按输入计数，与 speed 无关；让 consumed_position 反映源进度）
                     let source_count = samples.len() as u64;
                     // 变速变调（bypass 时直接 extend，零开销）
