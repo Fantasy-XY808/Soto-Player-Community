@@ -35,6 +35,9 @@
 - ⚡ **High-performance audio engine** — FFmpeg + Rust (EQ, loudness normalization, super-resolution exciter)
 - 📈 **Last.fm scrobbling**
 
+## Other version
+An unofficially maintained version. --> [AUR](https://aur.archlinux.org/packages/soto-player-community-unofficial-bin) [Github](https://github.com/Krits03/Soto-Player-Community)
+
 ## Development
 
 ### Requirements
