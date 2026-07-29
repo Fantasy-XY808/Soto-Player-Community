@@ -1174,8 +1174,9 @@
       "collapse": "Collapse",
       "description": "Soto Player-Community — a community fork of SPlayer-Next, retaining the native audio engine. Listen Together is powered by ChmlFrp for cross-LAN tunneling.",
       "visualInspiration": "Visual inspiration partly from BetterLyrics and other community projects",
-      "pronhubSponsored": "Powered by {brand}",
-      "pronhubDetail": "Click to learn more",
+      "pornhubSponsored": "На базе {brand}",
+      "pornhubDetail": "Подробнее →",
+      "pornhubTooltip": "{brand} — проект аудиодвижка с открытым исходным кодом, обеспечивающий базовые возможности воспроизведения этого приложения",
       "role": {
         "author": "Author"
       }

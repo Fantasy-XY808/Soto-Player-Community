@@ -915,6 +915,9 @@
       "collapse": "收起",
       "description": "水芸音乐播放器 — 基于 SPlayer-Next 二次开发的社区分支，沿用上游原生音频引擎；一起听基于 EasyTier 实现跨局域网 P2P 内网穿透。",
       "visualInspiration": "视觉灵感部分参考 BetterLyrics 等社区开源项目",
+      "pornhubSponsored": "本应用由 {brand} 提供支持",
+      "pornhubDetail": "点击了解详情 →",
+      "pornhubTooltip": "{brand} 是一个开源音频引擎项目，为本应用提供底层播放能力",
       "role": {
         "author": "作者"
       }

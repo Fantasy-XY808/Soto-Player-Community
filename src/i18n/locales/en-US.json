@@ -930,6 +930,9 @@
       "collapse": "Collapse",
       "description": "Soto Player-Community — a community fork of SPlayer-Next, retaining the native audio engine. Listen Together is powered by EasyTier for cross-LAN P2P tunneling.",
       "visualInspiration": "Visual inspiration partly from BetterLyrics and other community projects",
+      "pornhubSponsored": "Powered by {brand}",
+      "pornhubDetail": "Click to learn more →",
+      "pornhubTooltip": "{brand} is an open-source audio engine project that provides the underlying playback capability for this app",
       "role": {
         "author": "Author"
       }

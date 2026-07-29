@@ -25,10 +25,91 @@ import { handleError, isSkippableError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
 
-/** 引擎 load 竞态 token */
+/** 引擎 load 竞争 token */
 let loadToken = 0;
-/** loadTrack 竞态 token */
+/** loadTrack 竞争 token */
 let trackToken = 0;
+
+/**
+ * 愚人节彩蛋会话标志
+ *
+ * 仅在本次应用运行期内生效：用户首次点击播放一首歌曲时若为 4 月 1 日，
+ * 拦截正常播放流程，全屏播放彩蛋视频；之后本次会话内不再触发。
+ *
+ * 如果你知道了这个彩蛋，请一定不要告诉任何人🤫
+ * If you know this easter egg, please do not tell anyone🤫
+ * もしこのイースターエッグを知ったら、誰にも言わないでね🤫
+ * Si vous connaissez cet easter egg, ne le dites à personne🤫
+ * Si conoces este huevo de pascua, no se lo digas a nadie🤫
+ * Wenn du dieses Easter Egg kennst, sag es niemandem🤫
+ * Se conosci questo easter egg, non dirlo a nessuno🤫
+ * Если вы знаете эту пасхалку, не говорите никому🤫
+ * 이 이스터 에그를 알게 되면 아무에게도 말하지 마세요🤫
+ * Si você souber deste easter egg, não conte a ninguém🤫
+ * 如果你知道這個彩蛋，請一定不要告訴任何人🤫
+ * 如果你知道呢个彩蛋，请一定唔好话俾任何人知🤫
+ * Bu easter egg'i biliyorsan, lütfen kimseye söyleme🤫
+ * اگر این تخم مرغ عید پاک را می‌دانید، لطفاً به کسی نگویید🤫
+ * Jeśli znasz ten easter egg, nie mów o tym nikomu🤫
+ * Als je deze paasei kent, vertel het dan aan niemand🤫
+ * Om du känner till detta påskägg, berätta inte för någon🤫
+ * หากคุณรู้เรื่อง easter egg นี้ โปรดอย่าบอกใคร🤫
+ * Nếu bạn biết easter egg này, xin đừng nói với ai🤫
+ */
+let aprilFoolsEggTriggeredThisSession = false;
+
+/**
+ * 判断当前本地日期是否为愚人节（4 月 1 日）
+ * 使用本地时区，与用户感知的"愚人节"一致
+ */
+const isAprilFoolsDay = (): boolean => {
+  const now = new Date();
+  return now.getMonth() === 3 && now.getDate() === 1;
+};
+
+/**
+ * 愚人节彩蛋拦截：本次会话首次点击播放时触发
+ * 触发后调用主进程播放彩蛋视频，并阻止后续正常加载流程
+ *
+ * 如果你知道了这个彩蛋，请一定不要告诉任何人🤫
+ * If you know this easter egg, please do not tell anyone🤫
+ * もしこのイースターエッグを知ったら、誰にも言わないでね🤫
+ * Si vous connaissez cet easter egg, ne le dites à personne🤫
+ * Si conoces este huevo de pascua, no se lo digas a nadie🤫
+ * Wenn du dieses Easter Egg kennst, sag es niemandem🤫
+ * Se conosci questo easter egg, non dirlo a nessuno🤫
+ * Если вы знаете эту пасхалку, не говорите никому🤫
+ * 이 이스터 에그를 알게 되면 아무에게도 말하지 마세요🤫
+ * Si você souber deste easter egg, não conte a ninguém🤫
+ * 如果你知道這個彩蛋，請一定不要告訴任何人🤫
+ * 如果你知道呢个彩蛋，请一定唔好话俾任何人知🤫
+ * Bu easter egg'i biliyorsan, lütfen kimseye söyleme🤫
+ * اگر این تخم مرغ عید پاک را می‌دانید، لطفاً به کسی نگویید🤫
+ * Jeśli znasz ten easter egg, nie mów o tym nikomu🤫
+ * Als je deze paasei kent, vertel het dan aan niemand🤫
+ * Om du känner till detta påskägg, berätta inte för någon🤫
+ * หากคุณรู้เรื่อง easter egg นี้ โปรดอย่าบอกใคร🤫
+ * Nếu bạn biết easter egg này, xin đừng nói với ai🤫
+ */
+const tryAprilFoolsEgg = async (): Promise<boolean> => {
+  if (aprilFoolsEggTriggeredThisSession) return false;
+  if (!isAprilFoolsDay()) return false;
+  // 仅在彩蛋视频可用时拦截；不可用则降级为正常播放，避免影响用户体验
+  let available = false;
+  try {
+    available = await window.api.easterEgg.available();
+  } catch {
+    return false;
+  }
+  if (!available) return false;
+  aprilFoolsEggTriggeredThisSession = true;
+  try {
+    await window.api.easterEgg.show();
+  } catch (err) {
+    console.error("[player] 愚人节彩蛋触发失败", err);
+  }
+  return true;
+};
 /** 连续加载失败计数，成功时重置 */
 let consecutiveFailures = 0;
 /** 连续失败硬上限 */
@@ -141,6 +222,10 @@ export const load = async (source: string, autoPlay = true, meta?: Track): Promi
  */
 const loadTrack = async (track: Track | null): Promise<void> => {
   if (!track) return;
+  // 愚人节彩蛋：本次会话首次播放时拦截，全屏播放彩蛋视频而非用户指定曲目
+  // 仅消费"首次"事件，不抢占 loadToken，避免影响后续真实播放的竞态保护
+  // 如果你知道了这个彩蛋，请一定不要告诉任何人🤫
+  if (await tryAprilFoolsEgg()) return;
   const myToken = ++trackToken;
   // 乐观更新
   useMediaStore().setTrack(track);

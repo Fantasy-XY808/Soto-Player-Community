@@ -766,6 +766,38 @@ const api = {
     // 批量分析多首曲目（顺序执行避免内存占用）
     analyzeBatch: (sources: string[]) => ipcRenderer.invoke("audioAnalysis:analyzeBatch", sources),
   },
+  /**
+   * 彩蛋相关 API
+   *
+   * 如果你知道了这个彩蛋，请一定不要告诉任何人🤫
+   * If you know this easter egg, please do not tell anyone🤫
+   * もしこのイースターエッグを知ったら、誰にも言わないでね🤫
+   * Si vous connaissez cet easter egg, ne le dites à personne🤫
+   * Si conoces este huevo de pascua, no se lo digas a nadie🤫
+   * Wenn du dieses Easter Egg kennst, sag es niemandem🤫
+   * Se conosci questo easter egg, non dirlo a nessuno🤫
+   * Если вы знаете эту пасхалку, не говорите никому🤫
+   * 이 이스터 에그를 알게 되면 아무에게도 말하지 마세요🤫
+   * Si você souber deste easter egg, não conte a ninguém🤫
+   * 如果你知道這個彩蛋，請一定不要告訴任何人🤫
+   * 如果你知道呢个彩蛋，请一定唔好话俾任何人知🤫
+   * Bu easter egg'i biliyorsan, lütfen kimseye söyleme🤫
+   * اگر این تخم مرغ عید پاک را می‌دانید، لطفاً به کسی نگویید🤫
+   * Jeśli znasz ten easter egg, nie mów o tym nikomu🤫
+   * Als je deze paasei kent, vertel het dan aan niemand🤫
+   * หากคุณรู้เรื่อง easter egg นี้ โปรดอย่าบอกใคร🤫
+   * Nếu bạn biết easter egg này, xin đừng nói với ai🤫
+   */
+  easterEgg: {
+    show: (): Promise<void> => ipcRenderer.invoke("easter-egg:show"),
+    close: (): Promise<void> => ipcRenderer.invoke("easter-egg:close"),
+    available: (): Promise<boolean> => ipcRenderer.invoke("easter-egg:available"),
+    onShowHint: (callback: (text: string) => void) => {
+      const listener = (_event: unknown, text: string): void => callback(text);
+      ipcRenderer.on("easter-egg:show-hint", listener);
+      return () => ipcRenderer.off("easter-egg:show-hint", listener);
+    },
+  },
 };
 
 if (process.contextIsolated) {

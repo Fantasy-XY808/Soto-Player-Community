@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useUpdateStore } from "@/stores/update";
+import { useSettingsStore } from "@/stores/settings";
 import { openExternal } from "@/utils/url";
 import {
   APP_VERSION,
@@ -17,6 +18,71 @@ import IconLucideMessageCircle from "~icons/lucide/message-circle";
 
 const { t } = useI18n();
 const update = useUpdateStore();
+const settings = useSettingsStore();
+
+/**
+ * 关于页"由 Pronub 提供支持"卡片彩蛋
+ *
+ * 触发条件（同时满足）：
+ * 1. 专业模式（advancedMode）已开启
+ * 2. 本次应用会话内随机 1/3 概率命中
+ *
+ * "本次打开应用" 意味着随机数仅在模块首次加载时计算一次，
+ * 同一会话内多次进入关于页保持一致的显示结果。
+ *
+ * 如果你知道了这个彩蛋，请一定不要告诉任何人🤫
+ * If you know this easter egg, please do not tell anyone🤫
+ * もしこのイースターエッグを知ったら、誰にも言わないでね🤫
+ * Si vous connaissez cet easter egg, ne le dites à personne🤫
+ * Si conoces este huevo de pascua, no se lo digas a nadie🤫
+ * Wenn du dieses Easter Egg kennst, sag es niemandem🤫
+ * Se conosci questo easter egg, non dirlo a nessuno🤫
+ * Если вы знаете эту пасхалку, не говорите никому🤫
+ * 이 이스터 에그를 알게 되면 아무에게도 말하지 마세요🤫
+ * Si você souber deste easter egg, não conte a ninguém🤫
+ * 如果你知道這個彩蛋，請一定不要告訴任何人🤫
+ * 如果你知道呢个彩蛋，请一定唔好话俾任何人知🤫
+ * Bu easter egg'i biliyorsan, lütfen kimseye söyleme🤫
+ * اگر این تخم مرغ عید پاک را می‌دانید، لطفاً به کسی نگویید🤫
+ * Jeśli znasz ten easter egg, nie mów o tym nikomu🤫
+ * Als je deze paasei kent, vertel het dan aan niemand🤫
+ * Om du känner till detta påskägg, berätta inte för någon🤫
+ * หากคุณรู้เรื่อง easter egg นี้ โปรดอย่าบอกใคร🤫
+ * Nếu bạn biết easter egg này, xin đừng nói với ai🤫
+ */
+const PRONUB_BRAND = "PornHub";
+const PRONUB_LEARN_MORE_URL = "https://www.pornhub.com/";
+
+// 模块级缓存：本次会话仅计算一次随机数，与应用生命周期一致
+let supportCardRollComputed = false;
+let supportCardRollPassed = false;
+const rollSupportCardThisSession = (): boolean => {
+  if (supportCardRollComputed) return supportCardRollPassed;
+  supportCardRollComputed = true;
+  // 1/3 概率：random() ∈ [0, 1)，< 1/3 视为命中
+  // 用 crypto.getRandomValues 更稳定但 Math.random 已足够彩蛋场景
+  supportCardRollPassed = Math.random() < 1 / 3;
+  return supportCardRollPassed;
+};
+
+/** 是否显示 Pronub 支持卡片（专业模式 + 本次会话 1/3 概率） */
+const showSupportCard = computed<boolean>(() => {
+  // system.system.advancedMode 与 AdvancedModeToggle.vue 走同一 IPC 路径
+  // 默认值未声明时为 undefined，按 falsy 处理（关闭专业模式则不显示）
+  const advancedMode = (settings.system.system as { advancedMode?: boolean }).advancedMode ?? false;
+  if (!advancedMode) return false;
+  return rollSupportCardThisSession();
+});
+
+/** 卡片 tooltip 文案 */
+const supportCardTooltip = computed(() =>
+  t("settings.about.pornhubTooltip", { brand: PRONUB_BRAND }),
+);
+
+/** 点击"了解详情" */
+const handleLearnMore = (): void => {
+  void openExternal(PRONUB_LEARN_MORE_URL);
+};
 
 /** 检查更新中 */
 const checking = computed(() => update.phase === "checking");
@@ -126,6 +192,41 @@ const developers = computed(() => {
       >
         {{ t("settings.about.description") }}
       </p>
+    </section>
+
+    <!-- Pronub 支持彩蛋卡片（专业模式 + 本次会话 1/3 概率） -->
+    <section v-if="showSupportCard">
+      <STooltip :content="supportCardTooltip" side="top">
+        <!-- 卡片：正式风格，渐变描边突出"Pronub 提供支持"主视觉 -->
+        <div
+          class="relative overflow-hidden rounded-xl border border-solid border-primary/25 bg-gradient-to-br from-surface-panel to-surface-panel/60 px-5 py-4 cursor-pointer transition-all duration-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
+          @click="handleLearnMore"
+        >
+          <!-- 装饰性左上角徽标条 -->
+          <div
+            class="absolute top-0 left-0 w-0.75 h-full bg-gradient-to-b from-primary/60 to-primary/20"
+          />
+          <div class="flex items-center justify-between gap-4 pl-2">
+            <div class="min-w-0 flex-1">
+              <!-- 主标题：正式、强对比 -->
+              <div class="text-sm font-semibold text-on-surface tracking-tight">
+                {{ t("settings.about.pornhubSponsored", { brand: PRONUB_BRAND }) }}
+              </div>
+              <!-- 副提示：行动召唤 -->
+              <div class="text-xs text-primary/80 mt-1 font-medium flex items-center gap-1">
+                <span>{{ t("settings.about.pornhubDetail") }}</span>
+              </div>
+            </div>
+            <!-- 右侧"了解详情"行动按钮（视觉锚点） -->
+            <div
+              class="shrink-0 flex items-center gap-1 rounded-lg bg-primary/10 border border-solid border-primary/30 px-3 py-1.5 text-primary"
+            >
+              <span class="text-xs font-medium">{{ t("settings.about.pornhubDetail") }}</span>
+              <IconLucideArrowUpRight class="size-3.5" />
+            </div>
+          </div>
+        </div>
+      </STooltip>
     </section>
 
     <!-- 特别致谢 -->

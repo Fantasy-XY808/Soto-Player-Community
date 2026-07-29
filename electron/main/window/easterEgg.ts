@@ -64,7 +64,7 @@ const ESC_HINT_TEXTS: Record<LocaleCode, string> = {
 const getEscHint = (): string => ESC_HINT_TEXTS[getLocale()] ?? ESC_HINT_TEXTS["en-US"];
 
 // 彩蛋窗口标题
-const WINDOW_TITLE = "Pronhub";
+const WINDOW_TITLE = "PornHub";
 
 /** 获取彩蛋视频文件路径（开发模式与生产模式均支持） */
 const getVideoPath = (): string => {
