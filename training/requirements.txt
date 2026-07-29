@@ -1,0 +1,24 @@
+# Soto Player 神经网络上采样模块 - Phase B 训练脚本依赖
+# 固定版本，确保与 Rust 侧 ort::Session 推理链路兼容
+
+# PyTorch 训练框架（含 torchvision 等核心依赖）
+torch==2.2.0
+torchaudio==2.2.0
+
+# 数值计算
+numpy==1.26.4
+
+# 音频 IO
+soundfile==0.12.1
+librosa==0.10.1
+
+# ONNX 导出与推理验证（与 Rust 侧 ort 1.16.x 对齐）
+onnx==1.15.0
+onnxruntime==1.16.3
+
+# 训练进度条
+tqdm==4.66.1
+
+# PyTorch Lightning 训练框架
+pytorch-lightning==2.1.0
+torchmetrics==1.3.0

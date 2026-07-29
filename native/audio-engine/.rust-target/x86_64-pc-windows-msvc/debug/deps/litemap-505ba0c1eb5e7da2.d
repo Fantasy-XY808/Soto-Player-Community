@@ -1,0 +1,10 @@
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\litemap-505ba0c1eb5e7da2.d: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\map.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\mod.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\slice_impl.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\liblitemap-505ba0c1eb5e7da2.rlib: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\map.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\mod.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\slice_impl.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\liblitemap-505ba0c1eb5e7da2.rmeta: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\map.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\mod.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\slice_impl.rs
+
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\map.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\mod.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\litemap-0.8.2\src\store\slice_impl.rs:

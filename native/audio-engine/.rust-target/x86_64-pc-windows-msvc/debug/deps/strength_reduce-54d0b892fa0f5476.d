@@ -1,0 +1,9 @@
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\strength_reduce-54d0b892fa0f5476.d: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_division.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_multiplication.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\libstrength_reduce-54d0b892fa0f5476.rlib: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_division.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_multiplication.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\libstrength_reduce-54d0b892fa0f5476.rmeta: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_division.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_multiplication.rs
+
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_division.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\strength_reduce-0.2.4\src\long_multiplication.rs:

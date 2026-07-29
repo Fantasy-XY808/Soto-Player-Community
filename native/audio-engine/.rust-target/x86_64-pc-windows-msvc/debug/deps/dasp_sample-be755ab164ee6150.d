@@ -1,0 +1,10 @@
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\dasp_sample-be755ab164ee6150.d: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\conv.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\ops.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\types.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\libdasp_sample-be755ab164ee6150.rlib: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\conv.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\ops.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\types.rs
+
+C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\x86_64-pc-windows-msvc\debug\deps\libdasp_sample-be755ab164ee6150.rmeta: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\conv.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\ops.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\types.rs
+
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\lib.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\conv.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\ops.rs:
+C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\dasp_sample-0.11.0\src\types.rs:
