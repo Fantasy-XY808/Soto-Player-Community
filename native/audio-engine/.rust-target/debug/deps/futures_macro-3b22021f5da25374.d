@@ -1,9 +1,0 @@
-C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\debug\deps\futures_macro-3b22021f5da25374.d: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\executor.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\join.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\select.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\stream_select.rs
-
-C:\.Project\Soto_Player\Soto_Player-Community\native\audio-engine\.rust-target\debug\deps\futures_macro-3b22021f5da25374.dll: C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\lib.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\executor.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\join.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\select.rs C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\stream_select.rs
-
-C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\lib.rs:
-C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\executor.rs:
-C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\join.rs:
-C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\select.rs:
-C:\Users\Administrator\.cargo\registry\src\rsproxy.cn-e3de039b2554c837\futures-macro-0.3.33\src\stream_select.rs:
