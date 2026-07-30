@@ -1,6 +1,12 @@
 # Dependencies
 node_modules
 
+# Rust native build assets
+native/audio-engine/.rust-target
+native/taskbar-lyric/.rust-target
+native/media-ctrl/.rust-target
+native/taskbar-thumbnail/.rust-target
+
 # Build outputs
 dist
 out
